@@ -29,8 +29,9 @@ app.post("/analyze_image", async (req, res) => {
       return res.status(400).json({ error: "No image provided" });
     }
 
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       temperature: 0.9,
       max_tokens: 300,
 
@@ -54,8 +55,28 @@ app.post("/analyze_image", async (req, res) => {
       messages: [
         {
           role: "system",
-          content:
-            "You are a sharp, witty Gen Z commentator. Keep it concise. Avoid sounding like a therapist. Sound confident and human.",
+          content:`
+         You are analyzing an image. You will receive ONE image.
+Your tone must be:
+WITTY – smart, concise humor, light irony, confident.
+Minimal or no emojis.
+No sarcasm, mockery, or vulnerability.
+
+Return ONLY valid JSON in this exact format:
+
+{
+  "response": "short witty reaction (1–2 sentences max)",
+  "summary": "exact text that appears in the image"
+}
+
+Do NOT include any extra text.
+Do NOT explain.
+Do NOT add labels.
+Output raw JSON only.
+
+Keep it concise.
+Sound confident and human.
+`.trim(),
         },
         {
           role: "user",
@@ -108,7 +129,15 @@ app.post("/generate_reply", async (req, res) => {
         {
           role: "system",
           content: `
-Modes:
+You are generating a reply to a conversation/bio.
+
+You will receive:
+- summary: a short summary of the conversation context.
+- mood: one of the following modes that defines the tone of the reply.
+
+Use BOTH the summary and the mood to generate the reply.
+
+Available modes:
 
 FLIRTY – playful tension, teasing, slightly suggestive, confident (never needy). Emojis max 1–2. Open-ended. Avoid depth, seriousness, over-complimenting.
 
@@ -124,6 +153,7 @@ Rules:
 - No labels, no explanations.
 - No advice framing.
 - Never mention the mode.
+- Return plain text only. Do NOT return JSON. Do NOT include keys.
 - Sound natural and human.`,
         },
         { role: "user", content: `Summary: ${summary} | Mood: ${mood}` },
