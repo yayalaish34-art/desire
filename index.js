@@ -107,7 +107,7 @@ app.post("/charm_reply", async (req, res) => {
 
     if (!message && (!images || images.length === 0)) {
       return res.status(400).json({
-        error: "Provide 'message' and/or at least one image in 'images'",
+        error: "Provide 'message' and/or at least one image URL in 'images'",
       });
     }
 
@@ -133,21 +133,23 @@ Behavior rules:
 - No meta commentary.
 
 Output rules:
-- Return ONLY the final reply message (no labels, no explanations).
+- Return ONLY the final reply message.
 - Keep it short, natural, and human.
 
 Tone:
 Confident, composed, slightly elegant, emotionally aware.
     `.trim();
 
+    const imageParts = (Array.isArray(images) ? images : [])
+      .filter((url) => typeof url === "string" && url.trim().length > 0)
+      .map((url) => ({
+        type: "image_url",
+        image_url: { url }, // 🔥 פשוט משתמשים ב-URL כמו שהוא
+      }));
+
     const userContent = [
       ...(message ? [{ type: "text", text: message }] : []),
-      ...(Array.isArray(images) ? images : [])
-        .filter((b64) => typeof b64 === "string" && b64.trim().length > 0)
-        .map((b64) => ({
-          type: "image_url",
-          image_url: { url: `data:image/jpeg;base64,${b64}` },
-        })),
+      ...imageParts,
     ];
 
     const response = await openai.chat.completions.create({
@@ -156,19 +158,21 @@ Confident, composed, slightly elegant, emotionally aware.
       max_tokens: 160,
       messages: [
         { role: "system", content: systemInstruction },
-        ...history, // ✅ front sends ready-to-use messages
-        { role: "user", content: userContent }, // ✅ latest input + optional images
+        ...history,
+        { role: "user", content: userContent },
       ],
     });
 
     const reply = response.choices[0].message.content?.trim() || "";
 
     res.json({ reply });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
   }
 });
+
 
 
 const PORT = process.env.PORT || 3000;
