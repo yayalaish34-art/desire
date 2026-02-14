@@ -29,27 +29,38 @@ app.post("/analyze_image", async (req, res) => {
       return res.status(400).json({ error: "No image provided" });
     }
 
-    const response = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o",
+      temperature: 0.9,
+      max_tokens: 300,
+
+      // ✅ Force structured JSON output
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "image_analysis",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              response: { type: "string" }, // witty
+              summary: { type: "string" },  // exact text in image
+            },
+            required: ["response", "summary"],
+          },
+        },
+      },
+
       messages: [
         {
           role: "system",
-          content: `
-You are a sharp, witty Gen Z commentator.
-Your response must include:
-
-1) A short witty reaction (1-2 sentences max).
-2) A clear summary of exactly what text appears in the image.
-
-Keep it concise.
-Avoid sounding like a therapist.
-Sound confident and human.
-          `,
+          content:
+            "You are a sharp, witty Gen Z commentator. Keep it concise. Avoid sounding like a therapist. Sound confident and human.",
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Analyze this image." },
+            { type: "text", text: "Analyze this image. Return the JSON fields exactly." },
             {
               type: "image_url",
               image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
@@ -57,17 +68,34 @@ Sound confident and human.
           ],
         },
       ],
-      max_tokens: 300,
-      temperature: 0.9,
     });
 
-    const output = response.choices[0].message.content;
-    res.json({ result: output });
+    // With json_schema, the model returns a JSON string in content.
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(502).json({
+        error: "Model returned invalid JSON",
+        raw,
+      });
+    }
+
+    res.json({
+      response: parsed.response || "",
+      summary: parsed.summary || "",
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Something went wrong" });
+    res.status(500).json({
+      error: error?.message || "Something went wrong",
+      code: error?.code || null,
+    });
   }
 });
+
 
 app.post("/generate_reply", async (req, res) => {
   try {
@@ -80,10 +108,23 @@ app.post("/generate_reply", async (req, res) => {
         {
           role: "system",
           content: `
-Generate ONE short reply based on the summary.
-Respect the mood rules.
-Return only the reply.
-          `,
+Modes:
+
+FLIRTY – playful tension, teasing, slightly suggestive, confident (never needy). Emojis max 1–2. Open-ended. Avoid depth, seriousness, over-complimenting.
+
+CALM/DIVA – neutral, composed, short, direct. No flirting, humor, emojis, or emotional disclosure.
+
+GENUINE – warm, sincere, emotionally clear. Respectful. No teasing, pressure, or defensiveness.
+
+WITTY – smart concise humor, light irony, confident. Minimal/no emojis. No sarcasm, mockery, vulnerability.
+
+Rules:
+- Max 1–2 sentences.
+- Return ONE reply only.
+- No labels, no explanations.
+- No advice framing.
+- Never mention the mode.
+- Sound natural and human.`,
         },
         { role: "user", content: `Summary: ${summary} | Mood: ${mood}` },
       ],
@@ -122,7 +163,32 @@ app.post("/charm_reply", async (req, res) => {
       });
     }
 
-    const systemInstruction = `...YOUR VELOTRA SYSTEM...`.trim();
+    const systemInstruction = `You are Velora AI, an attraction and emotional dynamics mentor.
+
+Your role is to guide women in becoming naturally desirable through confidence, emotional intelligence, and secure energy.
+
+Internal framework:
+- True desirability comes from self-value and independence.
+- Availability should be natural, not constant.
+- Attraction grows through subtle tension, mystery, and emotional depth.
+- Social value should be authentic, never manipulative.
+- Secure attachment energy is more powerful than playing hard to get.
+- Never encourage games, dishonesty, or emotional manipulation.
+
+Behavior rules:
+- Respond clearly and intelligently.
+- Be calm, insightful, and grounded.
+- Do not overuse clichés.
+- Avoid extreme or toxic advice.
+- Focus on internal shift, not external tricks.
+- No meta commentary.
+
+Output rules:
+- Return ONLY the final reply message (no labels, no explanations).
+- Keep it short, natural, and human.
+
+Tone:
+Confident, composed, slightly elegant, emotionally aware.`.trim();
 
     // ✅ Accept only proper URLs / data URLs
     const imageParts = (Array.isArray(images) ? images : [])
