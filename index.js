@@ -21,7 +21,7 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 
 // 🔥 ROUTE
-app.post("/analyze-image", async (req, res) => {
+app.post("/analyze_image", async (req, res) => {
   try {
     const { imageBase64 } = req.body;
 
@@ -69,7 +69,7 @@ Sound confident and human.
   }
 });
 
-app.post("/generate-reply", async (req, res) => {
+app.post("/generate_reply", async (req, res) => {
   try {
     const { summary, mood } = req.body;
 
@@ -97,31 +97,26 @@ Return only the reply.
   }
 });
 
-// ✅ NEW: Charm reply from text +/or image (gpt-4o-mini)
-app.post("/charm-reply", async (req, res) => {
+app.post("/charm_reply", async (req, res) => {
   try {
-    const { messageText, imageBase64, context, mood } = req.body;
+    const { message, history, images } = req.body;
 
-    if (!messageText && !imageBase64) {
-      return res
-        .status(400)
-        .json({ error: "Provide messageText and/or imageBase64" });
+    if (!history || !Array.isArray(history)) {
+      return res.status(400).json({ error: "Provide 'history' as an array" });
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.9,
-      max_tokens: 160,
-      messages: [
-        {
-          role: "system",
-          content: `
+    if (!message && (!images || images.length === 0)) {
+      return res.status(400).json({
+        error: "Provide 'message' and/or at least one image in 'images'",
+      });
+    }
+
+    const systemInstruction = `
 You are Velora AI, an attraction and emotional dynamics mentor.
 
 Your role is to guide women in becoming naturally desirable through confidence, emotional intelligence, and secure energy.
 
 Internal framework:
-
 - True desirability comes from self-value and independence.
 - Availability should be natural, not constant.
 - Attraction grows through subtle tension, mystery, and emotional depth.
@@ -130,49 +125,51 @@ Internal framework:
 - Never encourage games, dishonesty, or emotional manipulation.
 
 Behavior rules:
-
 - Respond clearly and intelligently.
 - Be calm, insightful, and grounded.
 - Do not overuse clichés.
 - Avoid extreme or toxic advice.
 - Focus on internal shift, not external tricks.
-- No analysis of yourself.
 - No meta commentary.
+
+Output rules:
+- Return ONLY the final reply message (no labels, no explanations).
+- Keep it short, natural, and human.
 
 Tone:
 Confident, composed, slightly elegant, emotionally aware.
+    `.trim();
 
-          `,
-        },
-        {
-          role: "user",
-          content: [
-            ...(context ? [{ type: "text", text: `Context: ${context}` }] : []),
-            ...(mood ? [{ type: "text", text: `Mood: ${mood}` }] : []),
-            ...(messageText
-              ? [{ type: "text", text: `Incoming message: ${messageText}` }]
-              : []),
-            ...(imageBase64
-              ? [
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:image/jpeg;base64,${imageBase64}`,
-                    },
-                  },
-                ]
-              : []),
-          ],
-        },
+    const userContent = [
+      ...(message ? [{ type: "text", text: message }] : []),
+      ...(Array.isArray(images) ? images : [])
+        .filter((b64) => typeof b64 === "string" && b64.trim().length > 0)
+        .map((b64) => ({
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${b64}` },
+        })),
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.9,
+      max_tokens: 160,
+      messages: [
+        { role: "system", content: systemInstruction },
+        ...history, // ✅ front sends ready-to-use messages
+        { role: "user", content: userContent }, // ✅ latest input + optional images
       ],
     });
 
-    res.json({ reply: response.choices[0].message.content });
+    const reply = response.choices[0].message.content?.trim() || "";
+
+    res.json({ reply });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
