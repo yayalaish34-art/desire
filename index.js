@@ -174,7 +174,7 @@ Hard rules:
 - Make it feel sendable.
 
 Style rules:
-- 1 sentence.
+- 1 sentence only.
 - One reply only.
 - No labels.
 - No explanations.
