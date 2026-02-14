@@ -101,50 +101,38 @@ app.post("/charm_reply", async (req, res) => {
   try {
     const { message, history, images } = req.body;
 
+    // Debug safe (no base64 dump)
+    console.log("charm_reply", {
+      hasMessage: !!message,
+      historyLen: Array.isArray(history) ? history.length : null,
+      imagesLen: Array.isArray(images) ? images.length : null,
+      firstImagePrefix:
+        Array.isArray(images) && images[0]
+          ? String(images[0]).slice(0, 30)
+          : null,
+    });
+
     if (!history || !Array.isArray(history)) {
       return res.status(400).json({ error: "Provide 'history' as an array" });
     }
 
     if (!message && (!images || images.length === 0)) {
       return res.status(400).json({
-        error: "Provide 'message' and/or at least one image URL in 'images'",
+        error: "Provide 'message' and/or at least one image in 'images'",
       });
     }
 
-    const systemInstruction = `
-You are Velora AI, an attraction and emotional dynamics mentor.
+    const systemInstruction = `...YOUR VELOTRA SYSTEM...`.trim();
 
-Your role is to guide women in becoming naturally desirable through confidence, emotional intelligence, and secure energy.
-
-Internal framework:
-- True desirability comes from self-value and independence.
-- Availability should be natural, not constant.
-- Attraction grows through subtle tension, mystery, and emotional depth.
-- Social value should be authentic, never manipulative.
-- Secure attachment energy is more powerful than playing hard to get.
-- Never encourage games, dishonesty, or emotional manipulation.
-
-Behavior rules:
-- Respond clearly and intelligently.
-- Be calm, insightful, and grounded.
-- Do not overuse clichés.
-- Avoid extreme or toxic advice.
-- Focus on internal shift, not external tricks.
-- No meta commentary.
-
-Output rules:
-- Return ONLY the final reply message.
-- Keep it short, natural, and human.
-
-Tone:
-Confident, composed, slightly elegant, emotionally aware.
-    `.trim();
-
+    // ✅ Accept only proper URLs / data URLs
     const imageParts = (Array.isArray(images) ? images : [])
-      .filter((url) => typeof url === "string" && url.trim().length > 0)
+      .filter((u) => typeof u === "string" && u.trim().length > 0)
+      .map((u) => u.trim())
+      .filter((u) => u.startsWith("http") || u.startsWith("data:image/"))
+      .slice(0, 2) // 🔥 תתחיל עם 1-2 כדי לא להפיל
       .map((url) => ({
         type: "image_url",
-        image_url: { url }, // 🔥 פשוט משתמשים ב-URL כמו שהוא
+        image_url: { url }, // MUST be url
       }));
 
     const userContent = [
@@ -163,15 +151,29 @@ Confident, composed, slightly elegant, emotionally aware.
       ],
     });
 
-    const reply = response.choices[0].message.content?.trim() || "";
+    const reply = response?.choices?.[0]?.message?.content?.trim();
 
-    res.json({ reply });
+    if (!reply) {
+      return res.status(502).json({
+        error: "No reply returned from model",
+        raw: response,
+      });
+    }
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Something went wrong" });
+    return res.json({ reply });
+  } catch (err) {
+    // ✅ show the REAL OpenAI error in response + logs
+    console.error("charm_reply error:", err?.message);
+    console.error(err?.response?.data || err);
+
+    return res.status(500).json({
+      error: err?.message || "Something went wrong",
+      code: err?.code || null,
+      type: err?.type || null,
+    });
   }
 });
+
 
 
 
