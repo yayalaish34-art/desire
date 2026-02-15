@@ -56,72 +56,46 @@ app.post("/analyze_image", async (req, res) => {
         {
           role: "system",
           content:`
-You are analyzing a dating app screenshot.
+You are analyzing ONE dating app screenshot (either a chat or a profile).
 
-The screenshot is either:
-- a chat conversation
-- or a dating profile (bio / prompts)
+Return ONLY valid JSON with exactly these two fields:
+{
+  "response": "ONE sentence sendable reply to THEM",
+  "summary": "a structured extraction block (see format below)"
+}
 
-Your job is to extract the text needed to reply naturally, with enough context to avoid robotic replies.
+How to build summary (MUST follow this exact format as plain text inside the summary string):
+
+TYPE: chat|profile
+CONTEXT:
+- THEM: <text>
+- ME: <text>
+- THEM: <text>
+LAST THEM TEXT: <one of the THEM lines above, or NONE>
+UNCERTAIN: true|false
 
 Extraction rules:
-- Focus ONLY on the actual written messages / bio / prompts.
+- Focus ONLY on written messages/bio/prompts.
 - Ignore UI elements, timestamps, names, buttons, icons, layout, colors.
+- If chat: extract up to LAST 5 messages total, most recent first, label THEM/ME.
+- If profile: extract 1–2 most reply-worthy lines as THEM.
 
-If this is a chat:
-- Extract up to the LAST 5 messages total (most recent first), and label who wrote each one: THEM or ME.
-- The most important is the LAST message written by THEM (that is what we reply to).
-- If the last message is written by ME, still extract it, but mark that the last message is ME.
-
-If this is a profile:
-- Extract the 1–2 most reply-worthy lines from bio/prompts (specific statements > generic info).
-- Do NOT extract age, distance, job title headers, or UI labels.
-
-Output format (plain text only, no JSON):
-
-Write exactly this block:
-
-TYPE: chat or profile.
-CONTEXT:
-- THEM: "..."
-- ME: "..."
-- THEM: "..."    (include up to 3 lines for chat, most recent first; for profile include up to 2 lines as "THEM")
-LAST THEM TEXT: "..." (must be one of the lines above, or "NONE" if not visible)
-UNCERTAIN: true or false.
-
-Then write:
-REPLY: one sentence sendable reply to THEM.
-
-Reply rules:
+Rules for response:
 - Exactly 1 sentence.
-- No line breaks inside the reply.
-- Only these punctuation marks are allowed: . , ? ! '
+- No line breaks.
+- Only these punctuation marks allowed: . , ? ! '
 - Do NOT use: ; : " ( ) — … * _ # ~ |
 - No double punctuation.
 - Minimal or no emojis.
 - No narration of the image.
-- No summarizing the whole conversation.
-- No generic praise or motivational tone.
+- No motivational tone.
 - Avoid polished/corporate language.
-- Create momentum, slight boldness, micro-scenario if natural.
 - Sound like a real 23–28 year old texting.
-- Witty, confident, slightly playful, no sarcasm, no mockery.
+- Witty, confident, slightly playful. No sarcasm, no mockery.
 
+Output rules:
+- JSON only. No extra text. No markdown.
 
-Tone:
-Witty. Confident. Slightly playful.
-No sarcasm. No mockery.
-
-
-Return ONLY valid JSON:
-
-{
-  "response": "1 sentence reaction that feels sendable",
-  "summary": "exact text that appears in the image"
-}
-
-No extra text.
-Raw JSON only.
 `.trim(),
         },
         {
@@ -150,6 +124,7 @@ Raw JSON only.
       });
     }
 
+    console.log(parsed.response , parsed.summary);
     res.json({
       response: parsed.response || "",
       summary: parsed.summary || "",
