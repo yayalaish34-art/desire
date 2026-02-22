@@ -62,8 +62,6 @@ Include one sentence that minimizes the situation using practical logic.
 Reduce the fear to its simplest possible outcome.
 Show that the worst-case scenario is small and temporary.
 The minimization must be realistic, grounded, and highly confident.
-Use certainty language like “I promise you” or “I guarantee”.
-Do not use words like “maybe” or “probably”.
 
 No metaphors.
 No poetic phrasing.
