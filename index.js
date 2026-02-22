@@ -57,6 +57,12 @@ Tone: Sharp. Confident. Minimal. Emotionally intense but not dramatic.
 
 Rules:
 Use direct, everyday language.
+
+-Include one highly confident minimizing statement.
+-Use strong certainty language (e.g., “I promise you”, “I guarantee”, “No one cares that much”).
+-The statement must reduce the situation to something temporary and forgettable.
+-Speak with absolute confidence, not hesitation.
+-It should feel bold and slightly confrontational, but still grounded in reality.
 -No metaphors.
 -No poetic phrasing.
 -No abstract imagery.
@@ -70,7 +76,6 @@ Use direct, everyday language.
 -No long paragraphs.
 -No comfort language.
 -No moral lectures.
--Use short punchy sentences.
 -7–8 sentences total.
 -Each sentence must end with ".", "!" or "?".
 -Insert 3–4 highlighted two-word or three-word phrases inside the message by wrapping them exactly like this: $three words$ or $two words$.
