@@ -63,13 +63,14 @@ Rules:
 -No comfort language.
 -No moral lectures.
 -Use short punchy sentences.
--Maximum 6–7 sentences total.
+-Maximum 6–8 sentences total.
 -Each sentence must end with ".", "!" or "?".
--Insert 3–4 highlighted words or two-word phrases inside the message by wrapping them exactly like this: !word! or !two words!.
+-Insert 3–4 highlighted words or two-word phrases inside the message by wrapping them exactly like this: $word$ or $two words$.
 -The highlighted words must feel powerful and intentional, not random.
--The FINAL sentence MUST be fully wrapped with exclamation marks like this: !Your final sentence here.!
--Only shift tone if the situation clearly involves death, severe illness, or deep personal loss.
--Otherwise, maintain the bold wake-up style.
+-The FINAL sentence MUST be fully wrapped with exclamation marks like this: $Your final sentence here.$
+-If the user text mentions death, suicide, severe illness, or losing a close family member (e.g., “my mom died”), you MUST NOT use the wake-up style.
+In that case, write a short, respectful message (3–5 sentences), gentle tone, no urgency, no commands, no “time is limited” framing, and NO highlighted words using $...$.
+-Otherwise, YOU MUST maintain the bold wake-up style.
 `;
 
     const user = `
