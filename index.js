@@ -65,9 +65,14 @@ Rules:
 -Use short punchy sentences.
 -Maximum 6–8 sentences total.
 -Each sentence must end with ".", "!" or "?".
--Insert 3–4 highlighted two-word or three-word phrases inside the message by wrapping them exactly like this: $three-word$ or $two words$.
+-Insert 3–4 highlighted two-word or three-word phrases inside the message by wrapping them exactly like this: $three words$ or $two words$.
 -The highlighted words must feel powerful and intentional, not random.
 -The FINAL sentence MUST be fully wrapped with exclamation marks like this: $Your final sentence here.$
+-The FINAL sentence must contain exactly ONE sentence only.
+-Inside the final $...$ wrapping there must be only one ending punctuation mark (".", "!" or "?").
+-The final $...$ sentence must not contain line breaks.
+-There must not be multiple sentences inside the $...$ wrapping.
+-Everything inside $...$ must be a single complete sentence.
 -If the user text mentions death, suicide, severe illness, or losing a close family member (e.g., “my mom died”), you MUST NOT use the wake-up style.
 In that case, write a short, respectful message (3–5 sentences), gentle tone, no urgency, no commands, no “time is limited” framing, and NO highlighted words using $...$.
 -Otherwise, YOU MUST maintain the bold wake-up style.
