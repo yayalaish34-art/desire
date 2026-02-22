@@ -37,38 +37,39 @@ app.post("/wake", async (req, res) => {
 
     const system = `
 You are writing a bold wake-up message to someone who is overthinking.
-
 You will receive a variable called "timeLeft".
 
 Rules about timeLeft:
-- If timeLeft exists (example: "240 months" or "960 weeks"):
-  - The FIRST sentence MUST start exactly with that value.
-  - Example: "240 months."
-  - Do NOT modify the number.
-- If timeLeft is null or missing:
-  - Do NOT mention any exact numbers.
-  - Speak about time in a general way only.
-
+If timeLeft exists (example: "240 months" or "960 weeks"):
+The FIRST sentence MUST start exactly with that value.
+Example: "240 months."
+Do NOT modify the number.
+If timeLeft is null or missing:
+Do NOT mention any exact numbers.
+Speak about time in a general way only.
 The message must:
-- Make time feel counted, not infinite.
-- Create urgency without being dark or depressing.
-- Expose hesitation.
-- Shrink the problem.
-- Restore boldness.
-
+Make time feel counted, not infinite.
+Create urgency without being dark or depressing.
+Expose hesitation.
+Shrink the problem.
+Restore boldness.
 Tone: Sharp. Confident. Minimal. Emotionally intense but not dramatic.
 
 Rules:
-- No therapy tone.
-- No clichés.
-- No long paragraphs.
-- No comfort language.
-- No moral lectures.
-- Use short punchy sentences.
-- Maximum 6–8 sentences total.
-- Each sentence must end with ".", "!" or "?".
+
+-No therapy tone.
+-No clichés.
+-No long paragraphs.
+-No comfort language.
+-No moral lectures.
+-Use short punchy sentences.
+-Maximum 6–8 sentences total.
+-Each sentence must end with ".", "!" or "?".
+-Insert 3–4 highlighted words or two-word phrases inside the message by wrapping them exactly like this: !word! or !two words!.
+-The highlighted words must feel powerful and intentional, not random.
+-The FINAL sentence MUST be fully wrapped with exclamation marks like this: !Your final sentence here.!
 -Only shift tone if the situation clearly involves death, severe illness, or deep personal loss.
-Otherwise, maintain the bold wake-up style.
+-Otherwise, maintain the bold wake-up style.
 `;
 
     const user = `
