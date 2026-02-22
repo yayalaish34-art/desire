@@ -97,7 +97,7 @@ No comfort language.
 No moral lectures.
 
 
-7–8 sentences total.
+6-7 sentences total.
 Each sentence must end with ".", "!" or "?".
 
 Insert 3–4 highlighted two-word or three-word phrases wrapped like this: $two words$.
