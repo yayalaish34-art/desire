@@ -58,11 +58,10 @@ Tone: Sharp. Confident. Minimal. Emotionally intense but not dramatic.
 Rules:
 Use direct, everyday language.
 
--Include one highly confident minimizing statement.
--Use strong certainty language (e.g., “I promise you”, “I guarantee”, “No one cares that much”).
--The statement must reduce the situation to something temporary and forgettable.
--Speak with absolute confidence, not hesitation.
--It should feel bold and slightly confrontational, but still grounded in reality.
+Include one sentence that minimizes the situation using practical logic.
+Reduce the fear to its simplest possible outcome.
+Show that the worst-case scenario is small and temporary.
+The minimization must be realistic and grounded, not dramatic.
 -No metaphors.
 -No poetic phrasing.
 -No abstract imagery.
