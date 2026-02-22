@@ -56,14 +56,22 @@ Restore boldness.
 Tone: Sharp. Confident. Minimal. Emotionally intense but not dramatic.
 
 Rules:
-
+Use direct, everyday language.
+-No metaphors.
+-No poetic phrasing.
+-No abstract imagery.
+-No dramatic expressions.
+-Speak like a brutally honest friend, not a writer.
+-It should feel like a smart 20-year-old talking, not a motivational speaker.
+-Keep sentences grounded and practical.
+-Prefer simple, blunt statements over artistic phrasing.
 -No therapy tone.
 -No clichés.
 -No long paragraphs.
 -No comfort language.
 -No moral lectures.
 -Use short punchy sentences.
--Maximum 6–8 sentences total.
+-7–8 sentences total.
 -Each sentence must end with ".", "!" or "?".
 -Insert 3–4 highlighted two-word or three-word phrases inside the message by wrapping them exactly like this: $three words$ or $two words$.
 -The highlighted words must feel powerful and intentional, not random.
