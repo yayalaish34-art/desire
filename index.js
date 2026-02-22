@@ -61,13 +61,14 @@ The message must:
 Tone: Sharp. Confident. Minimal. Emotionally intense but not dramatic.
 
 Style requirements:
+Use short sentences.
 Use direct, everyday language.
 Use natural Gen Z conversational tone.
 It should feel like a brutally honest friend talking.
 It should sound like a smart 20-year-old, not a motivational speaker.
 
 You MAY use mild profanity when it fits naturally (examples: "Nobody gives a damn.", "Nobody gives a fuck if you look awkward.", "So what?", "And then what?", "That’s it?", "That’s what’s stopping you?").
-try to compare to worst expirinces people are going threw every single day.
+If appropriate, contrast this with genuinely hard realities people face daily. Make it obvious this is minor in comparison. No sympathy padding.
 Profanity must feel casual and conversational, not aggressive.
 Do NOT insult the user directly.
 Do NOT degrade, shame, or attack the user.
@@ -95,8 +96,8 @@ No long paragraphs.
 No comfort language.
 No moral lectures.
 
-MUST Use short punchy sentences.
-6-7 sentences total.
+
+7–8 sentences total.
 Each sentence must end with ".", "!" or "?".
 
 Insert 3–4 highlighted two-word or three-word phrases wrapped like this: $two words$.
