@@ -1,14 +1,17 @@
+// index.js
+// One-file backend (ESM) — Express + CORS + dotenv + OpenAI
+// Install: npm i express cors dotenv openai
+// Run: node index.js  (make sure package.json has "type": "module")
+// Env: OPENAI_API_KEY=..., PORT=3000 (optional)
+
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import OpenAI from "openai";
 
 dotenv.config();
-const app = express();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const app = express();
 
 app.use(
   cors({
@@ -20,173 +23,147 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 
-app.post("/wake", async (req, res) => {
-  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-
-  const send = (obj) => res.write(JSON.stringify(obj) + "\n");
-
-  try {
-    const { text, timeLeft } = req.body ?? {};
-
-    if (!text || typeof text !== "string") {
-      send({ type: "error", message: "Missing 'text' (string)." });
-      return res.end();
-    }
-
-    const system = `
-You are writing a bold wake-up message to someone who is overthinking.
-You will receive a variable called "timeLeft".
-
-Rules about timeLeft:
-- If timeLeft exists (example: "240 months" or "960 weeks"):
-  - The FIRST sentence MUST start exactly with timeLeft and end immediately.
-  - Example: "240 months."
-  - Do NOT modify the number or add words before it.
-  - It must be wrapped exactly like this: $timeLeft$.
-- Do NOT modify the number or add words inside the $...$.
-- Do NOT place any additional text inside the $...$.
-- If timeLeft is null or missing:
-  - Do NOT mention any exact numbers.
-  - Speak about time in a general way only.
-
-The message must:
-- Make time feel counted, not infinite.
-- Create urgency without being dark or depressing.
-- Expose hesitation.
-- Shrink the problem.
-- Restore boldness.
-
-Tone: Sharp. Confident. Minimal. Emotionally intense but not dramatic.
-
-Style requirements:
-Use short sentences.
-Use direct, everyday language.
-Use natural Gen Z conversational tone.
-It should feel like a brutally honest friend talking.
-It should sound like a smart 20-year-old, not a motivational speaker.
-
-You MAY use mild profanity when it fits naturally (examples: "Nobody gives a damn.", "Nobody gives a fuck if you look awkward.", "So what?", "And then what?", "That’s it?", "That’s what’s stopping you?").
-If appropriate, contrast this with genuinely hard realities people face daily. Make it obvious this is minor in comparison. No sympathy padding.
-Profanity must feel casual and conversational, not aggressive.
-Do NOT insult the user directly.
-Do NOT degrade, shame, or attack the user.
-If profanity is used, it must target the fear, the hesitation, or the situation — never the person.
-Avoid slurs or extreme language.
-Use profanity sparingly (no more than one strong profanity instance per message).
-
-Include one sentence that minimizes the situation using practical logic.
-Reduce the fear to its simplest possible outcome.
-Show that the worst-case scenario is small and temporary.
-The minimization must be realistic, grounded, and highly confident.
-
-No metaphors.
-No poetic phrasing.
-No abstract imagery.
-No dramatic expressions.
-Avoid elevated vocabulary.
-Use common conversational wording only.
-
-Keep sentences grounded and practical.
-Prefer simple, blunt statements.
-No therapy tone.
-No clichés.
-No long paragraphs.
-No comfort language.
-No moral lectures.
-
-
-6-7 sentences total.
-Each sentence must end with ".", "!" or "?".
-
-Insert 3–4 highlighted two-word or three-word phrases wrapped like this: $two words$.
-The highlights must feel intentional, not decorative.
-
-The FINAL sentence MUST be fully wrapped like this:
-$Your final sentence here.$
-
-The FINAL sentence must contain exactly ONE sentence.
-Inside $...$ there must be only one ending punctuation mark.
-No line breaks inside $...$.
-No multiple sentences inside $...$.
-Everything inside $...$ must be one complete sentence.
-
-If the user mentions death, suicide, severe illness, or loss of a close family member:
-- Do NOT use the wake-up style.
-- Write 3–5 respectful sentences.
-- Use a gentle, steady tone.
-- No urgency.
-- No commands.
-- No time framing.
-- NO $highlighting$.
-
-Otherwise, YOU MUST maintain the bold wake-up style.`
-
-    const user = `
-timeLeft: ${timeLeft ? `"${timeLeft}"` : "null"}
-
-What they're overthinking about:
-"${text}"
-`;
-
-    const stream = await openai.responses.stream({
-      model: "gpt-4.1",
-      temperature: 0.9,
-      input: [
-        { role: "system", content: system.trim() },
-        { role: "user", content: user.trim() },
-      ],
-    });
-
-    let buffer = "";
-    let i = 0;
-
-const flushSentences = () => {
-  while (true) {
-    // Don't cut if we're inside an open $...$
-    const dollarCount = (buffer.match(/\$/g) || []).length;
-    const insideHighlight = dollarCount % 2 !== 0;
-    if (insideHighlight) break;
-
-    const match = buffer.match(/[.!?](\s+)|\n+/);
-    if (!match || match.index == null) break;
-
-    const end = match.index + match[0].length;
-    const raw = buffer.slice(0, end);
-    buffer = buffer.slice(end);
-
-    const sentence = raw.replace(/\s+/g, " ").trim();
-    if (!sentence) continue;
-
-    i += 1;
-    send({ type: "sentence", i, text: sentence });
-  }
-};
-
-    for await (const event of stream) {
-      if (event.type === "response.output_text.delta") {
-        buffer += event.delta;
-        flushSentences();
-      }
-    }
-
-    const tail = buffer.replace(/\s+/g, " ").trim();
-    if (tail) {
-      i += 1;
-      send({ type: "sentence", i, text: tail });
-    }
-
-    send({ type: "done" });
-    res.end();
-  } catch (e) {
-    console.error(e);
-    send({ type: "error", message: "Failed to generate message." });
-    res.end();
-  }
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Health check (optional)
+app.get("/", (req, res) => {
+  res.json({ ok: true });
+});
 
+// POST /api/calories/burned
+// Body:
+// {
+//   workoutType: "weight lifting" | "run" (optional if description provided)
+//   description: string (optional if workoutType provided)
+//   durationMinutes?: number
+//   weightKg?: number
+//   age?: number
+//   sex?: "male" | "female"
+//   intensity?: "low" | "moderate" | "high"
+// }
+app.post("/api/calories/burned", async (req, res) => {
+  try {
+    const {
+      workoutType,
+      description,
+      durationMinutes,
+      weightKg,
+      age,
+      sex,
+      intensity,
+    } = req.body || {};
+
+    // Minimal validation (JS-only, no zod)
+    if (!workoutType && !description) {
+      return res
+        .status(400)
+        .json({ error: "Provide workoutType or description." });
+    }
+
+    const allowedTypes = new Set(["weight lifting", "run"]);
+    if (workoutType && !allowedTypes.has(workoutType)) {
+      return res.status(400).json({
+        error: 'workoutType must be "weight lifting" or "run".',
+      });
+    }
+
+    const allowedSex = new Set(["male", "female"]);
+    if (sex && !allowedSex.has(sex)) {
+      return res.status(400).json({ error: 'sex must be "male" or "female".' });
+    }
+
+    const allowedIntensity = new Set(["low", "moderate", "high"]);
+    if (intensity && !allowedIntensity.has(intensity)) {
+      return res.status(400).json({
+        error: 'intensity must be "low", "moderate", or "high".',
+      });
+    }
+
+    // Build prompt
+    const input = [
+      {
+        role: "system",
+        content:
+          "You estimate calories burned from workouts. Be realistic and conservative. Do not invent specific details; if something is missing, assume a reasonable default and explicitly mention the assumption. Output MUST match the JSON schema exactly. The description MUST be exactly 3 sentences.",
+      },
+      {
+        role: "user",
+        content: [
+          "Calculate calories burned for this workout.",
+          "Return JSON with:",
+          "- calories: number (no units)",
+          "- description: exactly 3 sentences explaining how it was calculated",
+          "",
+          `workoutType: ${workoutType ?? "N/A"}`,
+          `description: ${description ?? "N/A"}`,
+          `durationMinutes: ${durationMinutes ?? "N/A"}`,
+          `weightKg: ${weightKg ?? "N/A"}`,
+          `age: ${age ?? "N/A"}`,
+          `sex: ${sex ?? "N/A"}`,
+          `intensity: ${intensity ?? "N/A"}`,
+        ].join("\n"),
+      },
+    ];
+
+    const response = await client.responses.create({
+      model: "gpt-5-mini",
+      input,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "calories_burned",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["calories", "description"],
+            properties: {
+              calories: { type: "number" },
+              description: { type: "string" },
+            },
+          },
+        },
+      },
+      max_output_tokens: 200,
+    });
+
+    const text = (response.output_text || "").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return res.status(502).json({
+        error: "Model returned non-JSON output.",
+        raw: text,
+      });
+    }
+
+    // Ensure output shape
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.calories !== "number" ||
+      typeof parsed.description !== "string"
+    ) {
+      return res.status(502).json({
+        error: "Model returned JSON but not in the expected shape.",
+        raw: parsed,
+      });
+    }
+
+    // Optional: enforce exactly 3 sentences (soft enforcement)
+    // If you want strict enforcement, tell me and I'll hard-enforce with retry.
+    return res.json({
+      calories: parsed.calories,
+      description: parsed.description,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
