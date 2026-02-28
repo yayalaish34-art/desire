@@ -27,7 +27,7 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Health check (optional)
+// Health check
 app.get("/", (req, res) => {
   res.json({ ok: true });
 });
@@ -35,37 +35,46 @@ app.get("/", (req, res) => {
 // POST /api/calories/burned
 // Body:
 // {
-//   workoutType: "weight lifting" | "run" (optional if description provided)
-//   description: string (optional if workoutType provided)
-//   durationMinutes?: number
+//   workoutType?: "weight lifting" | "weights" | "run"  (both accepted)
+//   description?: string
+//   duration?: number   (training time in minutes)
 //   weightKg?: number
 //   age?: number
 //   sex?: "male" | "female"
-//   intensity?: "low" | "moderate" | "high"
+//   intensity?: "low" | "moderate" | "medium" | "high"  (medium = moderate)
 // }
+
 app.post("/api/calories/burned", async (req, res) => {
   try {
-    const {
+    let {
       workoutType,
       description,
-      durationMinutes,
+      duration,
       weightKg,
       age,
       sex,
       intensity,
     } = req.body || {};
 
-    // Minimal validation (JS-only, no zod)
     if (!workoutType && !description) {
       return res
         .status(400)
         .json({ error: "Provide workoutType or description." });
     }
 
-    const allowedTypes = new Set(["weight lifting", "run"]);
+    // Validate duration
+    if (duration !== undefined) {
+      if (typeof duration !== "number" || duration <= 0) {
+        return res.status(400).json({
+          error: "duration must be a positive number (minutes).",
+        });
+      }
+    }
+
+    const allowedTypes = new Set(["weights", "run"]);
     if (workoutType && !allowedTypes.has(workoutType)) {
       return res.status(400).json({
-        error: 'workoutType must be "weight lifting" or "run".',
+        error: 'workoutType must be "weights" or "run".',
       });
     }
 
@@ -74,19 +83,18 @@ app.post("/api/calories/burned", async (req, res) => {
       return res.status(400).json({ error: 'sex must be "male" or "female".' });
     }
 
-    const allowedIntensity = new Set(["low", "moderate", "high"]);
+    const allowedIntensity = new Set(["low", "medium", "high"]);
     if (intensity && !allowedIntensity.has(intensity)) {
       return res.status(400).json({
-        error: 'intensity must be "low", "moderate", or "high".',
+        error: 'intensity must be "low", "medium", or "high".',
       });
     }
 
-    // Build prompt
     const input = [
       {
         role: "system",
         content:
-          "You estimate calories burned from workouts. Be realistic and conservative. Do not invent specific details; if something is missing, assume a reasonable default and explicitly mention the assumption. Output MUST match the JSON schema exactly. The description MUST be exactly 3 sentences.",
+          "You estimate calories burned from workouts. Be realistic and conservative. If something is missing, assume a reasonable default and explicitly mention the assumption. The variable 'duration' represents the total workout time in minutes. Output MUST match the JSON schema exactly. The description MUST be exactly 3 sentences.",
       },
       {
         role: "user",
@@ -98,7 +106,7 @@ app.post("/api/calories/burned", async (req, res) => {
           "",
           `workoutType: ${workoutType ?? "N/A"}`,
           `description: ${description ?? "N/A"}`,
-          `durationMinutes: ${durationMinutes ?? "N/A"}`,
+          `duration (minutes): ${duration ?? "N/A"}`,
           `weightKg: ${weightKg ?? "N/A"}`,
           `age: ${age ?? "N/A"}`,
           `sex: ${sex ?? "N/A"}`,
@@ -140,7 +148,6 @@ app.post("/api/calories/burned", async (req, res) => {
       });
     }
 
-    // Ensure output shape
     if (
       !parsed ||
       typeof parsed !== "object" ||
@@ -153,8 +160,6 @@ app.post("/api/calories/burned", async (req, res) => {
       });
     }
 
-    // Optional: enforce exactly 3 sentences (soft enforcement)
-    // If you want strict enforcement, tell me and I'll hard-enforce with retry.
     return res.json({
       calories: parsed.calories,
       description: parsed.description,
