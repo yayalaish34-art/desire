@@ -62,7 +62,6 @@ app.post("/api/calories/burned", async (req, res) => {
         .json({ error: "Provide workoutType or description." });
     }
 
-    // Validate duration
     if (duration !== undefined) {
       if (typeof duration !== "number" || duration <= 0) {
         return res.status(400).json({
@@ -94,7 +93,7 @@ app.post("/api/calories/burned", async (req, res) => {
       {
         role: "system",
         content:
-          "You estimate calories burned from workouts. Be realistic and conservative. If something is missing, assume a reasonable default and explicitly mention the assumption. The variable 'duration' represents the total workout time in minutes. Output MUST match the JSON schema exactly. The description MUST be exactly 3 sentences.",
+          "You estimate calories burned from workouts. Be realistic and conservative. If something is missing, assume a reasonable default.",
       },
       {
         role: "user",
@@ -102,7 +101,6 @@ app.post("/api/calories/burned", async (req, res) => {
           "Calculate calories burned for this workout.",
           "Return JSON with:",
           "- calories: number (no units)",
-          "- description: exactly 3 sentences explaining how it was calculated",
           "",
           `workoutType: ${workoutType ?? "N/A"}`,
           `description: ${description ?? "N/A"}`,
@@ -125,15 +123,14 @@ app.post("/api/calories/burned", async (req, res) => {
           schema: {
             type: "object",
             additionalProperties: false,
-            required: ["calories", "description"],
+            required: ["calories"],
             properties: {
               calories: { type: "number" },
-              description: { type: "string" },
             },
           },
         },
       },
-      max_output_tokens: 200,
+      max_output_tokens: 100,
     });
 
     const text = (response.output_text || "").trim();
@@ -148,21 +145,15 @@ app.post("/api/calories/burned", async (req, res) => {
       });
     }
 
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      typeof parsed.calories !== "number" ||
-      typeof parsed.description !== "string"
-    ) {
+    if (!parsed || typeof parsed.calories !== "number") {
       return res.status(502).json({
-        error: "Model returned JSON but not in the expected shape.",
+        error: "Model returned invalid shape.",
         raw: parsed,
       });
     }
 
     return res.json({
       calories: parsed.calories,
-      description: parsed.description,
     });
   } catch (err) {
     console.error(err);
