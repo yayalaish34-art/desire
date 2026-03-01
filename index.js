@@ -1,8 +1,5 @@
 // index.js
 // One-file backend (ESM) — Express + CORS + dotenv + OpenAI
-// Install: npm i express cors dotenv openai
-// Run: node index.js  (make sure package.json has "type": "module")
-// Env: OPENAI_API_KEY=..., PORT=3000 (optional)
 
 import express from "express";
 import dotenv from "dotenv";
@@ -27,94 +24,177 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Health check
+// ---------------- HEALTH CHECK ----------------
 app.get("/", (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/calories/burned
-// Body:
-// {
-//   workoutType?: "weight lifting" | "weights" | "run"  (both accepted)
-//   description?: string
-//   duration?: number   (training time in minutes)
-//   weightKg?: number
-//   age?: number
-//   sex?: "male" | "female"
-//   intensity?: "low" | "moderate" | "medium" | "high"  (medium = moderate)
-// }
+// ---------------- BARCODE ROUTE ----------------
+app.post("/barcode", async (req, res) => {
+  try {
+    const { barcode } = req.body;
+    if (!barcode)
+      return res.status(400).json({ error: "barcode is required" });
 
+    const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`;
+
+    const r = await fetch(url, {
+      headers: {
+        "User-Agent": "EatLessLab/1.0 (contact: you@example.com)",
+      },
+    });
+
+    if (!r.ok)
+      return res.status(502).json({ error: "OpenFoodFacts error" });
+
+    const data = await r.json();
+    if (data?.status !== 1 || !data?.product)
+      return res.status(404).json({ error: "Product not found" });
+
+    const p = data.product;
+    const n = p.nutriments || {};
+
+    // ---------- IMAGE ----------
+    const imageUrl =
+      p.image_front_url ||
+      p.image_front_small_url ||
+      p.image_url ||
+      p.image_small_url ||
+      null;
+
+    // ---------- HELPERS ----------
+    const toNumber = (v) =>
+      Number.isFinite(Number(v)) ? Number(v) : null;
+
+    const parseGrams = (str) => {
+      if (!str || typeof str !== "string") return null;
+      const s = str.toLowerCase().replace(",", ".");
+      const m = s.match(/(\d+(\.\d+)?)\s*(g|kg)\b/);
+      if (!m) return null;
+      const num = Number(m[1]);
+      return m[3] === "kg" ? num * 1000 : num;
+    };
+
+    const round = (v) =>
+      v == null ? null : Math.round(v * 10) / 10;
+
+    // ---------- BASE VALUES (100g) ----------
+    const per100g = {
+      calories:
+        toNumber(n["energy-kcal_100g"]) ??
+        (toNumber(n["energy_100g"]) != null
+          ? toNumber(n["energy_100g"]) / 4.184
+          : null),
+      protein: toNumber(n["proteins_100g"]),
+      carbs: toNumber(n["carbohydrates_100g"]),
+      fat: toNumber(n["fat_100g"]),
+      sugar: toNumber(n["sugars_100g"]),
+    };
+
+    // ---------- SERVING ----------
+    const servingGrams =
+      parseGrams(p.serving_size) ??
+      toNumber(p.serving_quantity);
+
+    const perServing = servingGrams
+      ? {
+          calories: round((per100g.calories * servingGrams) / 100),
+          protein: round((per100g.protein * servingGrams) / 100),
+          carbs: round((per100g.carbs * servingGrams) / 100),
+          fat: round((per100g.fat * servingGrams) / 100),
+          sugar: round((per100g.sugar * servingGrams) / 100),
+        }
+      : null;
+
+    // ---------- TOTAL PACKAGE ----------
+    const totalGrams =
+      parseGrams(p.product_quantity) ??
+      toNumber(p.product_quantity);
+
+    const perPackage = totalGrams
+      ? {
+          calories: round((per100g.calories * totalGrams) / 100),
+          protein: round((per100g.protein * totalGrams) / 100),
+          carbs: round((per100g.carbs * totalGrams) / 100),
+          fat: round((per100g.fat * totalGrams) / 100),
+          sugar: round((per100g.sugar * totalGrams) / 100),
+        }
+      : null;
+
+    // ---------- 100 OZ (2,834.95g) ----------
+    const OZ100_IN_GRAMS = 2834.95;
+
+    const per100oz = {
+      calories: round((per100g.calories * OZ100_IN_GRAMS) / 100),
+      protein: round((per100g.protein * OZ100_IN_GRAMS) / 100),
+      carbs: round((per100g.carbs * OZ100_IN_GRAMS) / 100),
+      fat: round((per100g.fat * OZ100_IN_GRAMS) / 100),
+      sugar: round((per100g.sugar * OZ100_IN_GRAMS) / 100),
+    };
+
+    return res.json({
+      name: p.product_name_en || p.product_name || "Unknown",
+      imageUrl,
+
+      per100g: {
+        calories: round(per100g.calories),
+        protein: round(per100g.protein),
+        carbs: round(per100g.carbs),
+        fat: round(per100g.fat),
+        sugar: round(per100g.sugar),
+      },
+
+      perServing: servingGrams
+        ? {
+            grams: servingGrams,
+            ...perServing,
+          }
+        : null,
+
+      per100oz,
+
+      perPackage: totalGrams
+        ? {
+            grams: totalGrams,
+            ...perPackage,
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ---------------- CALORIES BURNED ROUTE ----------------
 app.post("/api/calories/burned", async (req, res) => {
   try {
-    let {
-      workoutType,
-      description,
-      duration,
-      weightKg,
-      age,
-      sex,
-      intensity,
-    } = req.body || {};
-
-    if (!workoutType && !description) {
-      return res
-        .status(400)
-        .json({ error: "Provide workoutType or description." });
-    }
-
-    if (duration !== undefined) {
-      if (typeof duration !== "number" || duration <= 0) {
-        return res.status(400).json({
-          error: "duration must be a positive number (minutes).",
-        });
-      }
-    }
-
-    const allowedTypes = new Set(["weights", "run"]);
-    if (workoutType && !allowedTypes.has(workoutType)) {
-      return res.status(400).json({
-        error: 'workoutType must be "weights" or "run".',
-      });
-    }
-
-    const allowedSex = new Set(["male", "female"]);
-    if (sex && !allowedSex.has(sex)) {
-      return res.status(400).json({ error: 'sex must be "male" or "female".' });
-    }
-
-    const allowedIntensity = new Set(["low", "medium", "high"]);
-    if (intensity && !allowedIntensity.has(intensity)) {
-      return res.status(400).json({
-        error: 'intensity must be "low", "medium", or "high".',
-      });
-    }
+    let { description, weightKg, age, sex } = req.body || {};
 
     const input = [
       {
         role: "system",
         content:
-          "You estimate calories burned from workouts. Be realistic and conservative. If something is missing, assume a reasonable default.",
+          "You estimate calories burned from workouts. Be realistic and conservative.",
       },
       {
         role: "user",
-        content: [
-          "Calculate calories burned for this workout.",
-          "Return JSON with:",
-          "- calories: number (no units)",
-          "",
-          `workoutType: ${workoutType ?? "N/A"}`,
-          `description: ${description ?? "N/A"}`,
-          `duration (minutes): ${duration ?? "N/A"}`,
-          `weightKg: ${weightKg ?? "N/A"}`,
-          `age: ${age ?? "N/A"}`,
-          `sex: ${sex ?? "N/A"}`,
-          `intensity: ${intensity ?? "N/A"}`,
-        ].join("\n"),
+        content: `
+description: ${description}
+weightKg: ${weightKg}
+age: ${age}
+sex: ${sex}
+
+Return JSON:
+{
+  "calories": number
+}
+`,
       },
     ];
 
     const response = await client.responses.create({
-      model: "gpt-5-mini",
+      model: "gpt-4o-mini",
       input,
       response_format: {
         type: "json_schema",
@@ -134,23 +214,7 @@ app.post("/api/calories/burned", async (req, res) => {
     });
 
     const text = (response.output_text || "").trim();
-
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return res.status(502).json({
-        error: "Model returned non-JSON output.",
-        raw: text,
-      });
-    }
-
-    if (!parsed || typeof parsed.calories !== "number") {
-      return res.status(502).json({
-        error: "Model returned invalid shape.",
-        raw: parsed,
-      });
-    }
+    const parsed = JSON.parse(text);
 
     return res.json({
       calories: parsed.calories,
