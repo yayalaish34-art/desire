@@ -50,15 +50,7 @@ app.post("/barcode", async (req, res) => {
     const p = data.product;
     const n = p.nutriments || {};
 
-    // ---------- IMAGE ----------
-    const imageUrl =
-      p.image_front_url ||
-      p.image_front_small_url ||
-      p.image_url ||
-      p.image_small_url ||
-      null;
-
-    // ---------- HELPERS ----------
+    // ---------- helpers ----------
     const toNumber = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
     const round = (v, decimals = 4) => {
@@ -70,62 +62,46 @@ app.post("/barcode", async (req, res) => {
     const normalizeUnit = (u) =>
       typeof u === "string" ? u.trim().toLowerCase().replace(/\./g, "") : null;
 
-    const unitToBaseMultiplier = (unit, baseType) => {
+    const isLiquidUnit = (u) => {
+      const x = normalizeUnit(u);
+      return x === "ml" || x === "l" || x === "cl" || x === "dl" || x === "floz" || x === "fl oz";
+    };
+
+    // 1ml = 1g assumption is baked into this conversion table
+    const unitToMlOrGMultiplier = (unit) => {
       const u = normalizeUnit(unit);
       if (!u) return null;
 
-      if (baseType === "g") {
-        if (u === "g") return 1;
-        if (u === "kg") return 1000;
-        if (u === "mg") return 0.001;
-        if (u === "oz") return 28.349523125;
-        return null;
-      }
+      // mass
+      if (u === "g") return 1;
+      if (u === "kg") return 1000;
+      if (u === "mg") return 0.001;
+      if (u === "oz") return 28.349523125;
 
-      if (baseType === "ml") {
-        if (u === "ml") return 1;
-        if (u === "l") return 1000;
-        if (u === "cl") return 10;
-        if (u === "dl") return 100;
-        if (u === "floz" || u === "fl oz") return 29.5735295625;
-        return null;
-      }
+      // volume
+      if (u === "ml") return 1;
+      if (u === "l") return 1000;
+      if (u === "cl") return 10;
+      if (u === "dl") return 100;
+      if (u === "floz" || u === "fl oz") return 29.5735295625;
 
       return null;
     };
 
-    const parseQuantityStringToBase = (quantityStr, baseType) => {
+    const parseQuantityString = (quantityStr) => {
       if (!quantityStr || typeof quantityStr !== "string") return null;
       let s = quantityStr.toLowerCase().replace(",", ".").trim();
       s = s.replace(/\s+/g, " ");
 
-      const m = s.match(
-        /(\d+(\.\d+)?)\s*(kg|g|mg|ml|l|cl|dl|fl oz|floz|oz)\b/
-      );
+      const m = s.match(/(\d+(\.\d+)?)\s*(kg|g|mg|ml|l|cl|dl|fl oz|floz|oz)\b/);
       if (!m) return null;
 
       const amount = Number(m[1]);
       const unit = m[3];
-      const mul = unitToBaseMultiplier(unit, baseType);
+      const mul = unitToMlOrGMultiplier(unit);
       if (!mul) return null;
-      return amount * mul;
-    };
 
-    // serving_size often: "1 slice (28 g)" or "(250 ml)"
-    const parseServingSizeToBase = (servingSizeStr, baseType) => {
-      if (!servingSizeStr || typeof servingSizeStr !== "string") return null;
-      let s = servingSizeStr.toLowerCase().replace(",", ".").trim();
-
-      // prefer the value inside parentheses if exists
-      const paren = s.match(/\((\d+(\.\d+)?)\s*(kg|g|mg|ml|l|cl|dl|fl oz|floz|oz)\)/);
-      const m = paren || s.match(/(\d+(\.\d+)?)\s*(kg|g|mg|ml|l|cl|dl|fl oz|floz|oz)\b/);
-      if (!m) return null;
-
-      const amount = Number(m[1]);
-      const unit = m[3];
-      const mul = unitToBaseMultiplier(unit, baseType);
-      if (!mul) return null;
-      return amount * mul;
+      return amount * mul; // returns "base amount" in ml-or-g numeric space
     };
 
     const pickName = () =>
@@ -143,163 +119,106 @@ app.post("/barcode", async (req, res) => {
       return g ? g.toUpperCase() : null;
     };
 
-    // ---------- DETECT TYPE ----------
-    const isLiquidUnit = (u) => {
-      const x = normalizeUnit(u);
-      return x === "ml" || x === "l" || x === "cl" || x === "dl" || x === "floz" || x === "fl oz";
-    };
+    // ---------- product image ----------
+    const imageUrl =
+      p.image_front_url ||
+      p.image_front_small_url ||
+      p.image_url ||
+      p.image_small_url ||
+      null;
 
+    // ---------- detect type ----------
     const isDrink = isLiquidUnit(p.product_quantity_unit);
     const type = isDrink ? "drink" : "food";
-    const baseType = isDrink ? "ml" : "g";
 
-    // ---------- PACK ----------
+    // ---------- pack amount (ml for drinks, g for food; numeric is same space due to 1ml=1g assumption) ----------
     const packFromProductQuantity = (() => {
       const qty = toNumber(p.product_quantity);
-      const unit = p.product_quantity_unit;
       if (qty == null) return null;
-      const mul = unitToBaseMultiplier(unit, baseType);
+      const mul = unitToMlOrGMultiplier(p.product_quantity_unit);
       if (!mul) return null;
       return qty * mul;
     })();
 
-    const packFromQuantityString = parseQuantityStringToBase(p.quantity, baseType);
+    const packFromQuantityString = parseQuantityString(p.quantity);
     const packAmountBase = packFromProductQuantity ?? packFromQuantityString ?? null;
 
-    // ---------- SERVING SIZE (in base units) ----------
-    const servingQty = toNumber(p.serving_quantity);
-    const servingUnit = p.serving_quantity_unit;
-    const servingFromServingQuantity =
-      servingQty != null
-        ? (() => {
-            const mul = unitToBaseMultiplier(servingUnit, baseType);
-            return mul ? servingQty * mul : null;
-          })()
-        : null;
+    const packBaseUnit = isDrink ? "ml" : "g";
 
-    const servingFromServingSize = parseServingSizeToBase(p.serving_size, baseType);
+    // ---------- nutriments per100 ----------
+    // Drinks: prefer _100ml, fallback to _100g
+    // Food: use _100g (fallback to _100ml if exists for weird cases)
+    const getPer100 = () => {
+      const pick = (key) => {
+        if (isDrink) {
+          return toNumber(n[`${key}_100ml`]) ?? toNumber(n[`${key}_100g`]) ?? null;
+        }
+        return toNumber(n[`${key}_100g`]) ?? toNumber(n[`${key}_100ml`]) ?? null;
+      };
 
-    const servingAmountBase = servingFromServingQuantity ?? servingFromServingSize ?? null;
+      const kcal =
+        (isDrink
+          ? toNumber(n["energy-kcal_100ml"]) ?? toNumber(n["energy-kcal_100g"])
+          : toNumber(n["energy-kcal_100g"]) ?? toNumber(n["energy-kcal_100ml"])) ??
+        null;
 
-    // ---------- NUTRIMENTS via *_serving ----------
-    // pulls “per serving” values directly from nutriments object
-    const perServing = {
-      calories: toNumber(n["energy-kcal_serving"]),
-      protein: toNumber(n["proteins_serving"]),
-      carbs: toNumber(n["carbohydrates_serving"]),
-      fat: toNumber(n["fat_serving"]),
-      salt: toNumber(n["salt_serving"]),
+      if (kcal != null) {
+        return {
+          calories: kcal,
+          protein: pick("proteins"),
+          carbs: pick("carbohydrates"),
+          fat: pick("fat"),
+          salt: pick("salt"),
+        };
+      }
+
+      // kcal missing -> try kJ
+      const kj =
+        (isDrink
+          ? toNumber(n["energy-kj_100ml"]) ??
+            toNumber(n["energy-kj_100g"]) ??
+            toNumber(n["energy_100ml"]) ??
+            toNumber(n["energy_100g"])
+          : toNumber(n["energy-kj_100g"]) ??
+            toNumber(n["energy_100g"]) ??
+            toNumber(n["energy-kj_100ml"]) ??
+            toNumber(n["energy_100ml"])) ?? null;
+
+      return {
+        calories: kj != null ? kj / 4.184 : null,
+        protein: pick("proteins"),
+        carbs: pick("carbohydrates"),
+        fat: pick("fat"),
+        salt: pick("salt"),
+      };
     };
 
-    // If calories missing but kJ serving exists, convert:
-    if (perServing.calories == null) {
-      const kjServing = toNumber(n["energy-kj_serving"]) ?? toNumber(n["energy_serving"]);
-      if (kjServing != null) perServing.calories = kjServing / 4.184;
-    }
+    const per100 = getPer100();
 
-    const hasAnyServing =
-      perServing.calories != null ||
-      perServing.protein != null ||
-      perServing.carbs != null ||
-      perServing.fat != null ||
-      perServing.salt != null;
-
-    // ---------- BACKUP per100 (only if serving missing) ----------
-    const suffix = isDrink ? "_100ml" : "_100g";
-    const per100Backup = {
-      calories: toNumber(n[`energy-kcal${suffix}`]) ?? (() => {
-        const kj = toNumber(n[`energy${suffix}`]) ?? toNumber(n[`energy-kj${suffix}`]);
-        return kj != null ? kj / 4.184 : null;
-      })(),
-      protein: toNumber(n[`proteins${suffix}`]),
-      carbs: toNumber(n[`carbohydrates${suffix}`]),
-      fat: toNumber(n[`fat${suffix}`]),
-      salt: toNumber(n[`salt${suffix}`]),
-    };
-
-    // choose base source
-    const base = hasAnyServing ? { ...perServing, _basis: "serving" } : { ...per100Backup, _basis: "per100" };
-
-    // ---------- SCALE HELPERS ----------
-    const scaleObj = (obj, factor, decimals = 4) => ({
-      calories: obj.calories == null ? null : round(obj.calories * factor, decimals),
-      protein: obj.protein == null ? null : round(obj.protein * factor, decimals),
-      carbs: obj.carbs == null ? null : round(obj.carbs * factor, decimals),
-      fat: obj.fat == null ? null : round(obj.fat * factor, decimals),
-      salt: obj.salt == null ? null : round(obj.salt * factor, decimals),
+    const scale = (factor, decimals = 4) => ({
+      calories: per100.calories == null ? null : round(per100.calories * factor, decimals),
+      protein: per100.protein == null ? null : round(per100.protein * factor, decimals),
+      carbs: per100.carbs == null ? null : round(per100.carbs * factor, decimals),
+      fat: per100.fat == null ? null : round(per100.fat * factor, decimals),
+      salt: per100.salt == null ? null : round(per100.salt * factor, decimals),
     });
 
-    // ---------- OUTPUTS (keep same fields) ----------
-    // per1g/perOz only makes sense for food; for drinks keep null like before
-    // If base is per serving, we can still compute per-gram by dividing by serving grams (if we have it).
-    const per1g = !isDrink
-      ? (() => {
-          if (base._basis === "serving") {
-            if (servingAmountBase == null || servingAmountBase <= 0) return null;
-            return {
-              unit: "g",
-              amount: 1,
-              ...scaleObj(base, 1 / servingAmountBase, 6),
-            };
-          } else {
-            // per100 -> per1g is /100
-            return { unit: "g", amount: 1, ...scaleObj(base, 1 / 100, 6) };
-          }
-        })()
-      : null;
+    // ---------- outputs (same fields) ----------
+    const per1g = !isDrink ? { unit: "g", amount: 1, ...scale(1 / 100, 6) } : null;
 
     const perOz = !isDrink
-      ? (() => {
-          const OZ_G = 28.349523125;
-          if (base._basis === "serving") {
-            if (servingAmountBase == null || servingAmountBase <= 0) return null;
-            return {
-              unit: "oz",
-              amount: 1,
-              ...scaleObj(base, OZ_G / servingAmountBase, 4),
-            };
-          } else {
-            return { unit: "oz", amount: 1, ...scaleObj(base, OZ_G / 100, 4) };
-          }
-        })()
+      ? { unit: "oz", amount: 1, ...scale(28.349523125 / 100, 4) }
       : null;
 
-    const perCup250ml = isDrink
-      ? (() => {
-          // If base is per serving and serving is known in ml -> we can compute 250ml
-          if (base._basis === "serving") {
-            if (servingAmountBase == null || servingAmountBase <= 0) return null;
-            return { unit: "ml", amount: 250, ...scaleObj(base, 250 / servingAmountBase, 3) };
-          } else {
-            return { unit: "ml", amount: 250, ...scaleObj(base, 250 / 100, 3) };
-          }
-        })()
-      : null;
+    const perCup250ml = isDrink ? { unit: "ml", amount: 250, ...scale(250 / 100, 3) } : null;
 
     const perPackage =
       packAmountBase != null
-        ? (() => {
-            if (base._basis === "serving") {
-              if (servingAmountBase == null || servingAmountBase <= 0) {
-                // no serving grams/ml -> can't scale serving to package
-                return null;
-              }
-              const factor = packAmountBase / servingAmountBase;
-              return {
-                unit: isDrink ? "ml" : "g",
-                amount: round(packAmountBase, 0),
-                ...scaleObj(base, factor, 3),
-              };
-            } else {
-              // per100 -> scale by pack/100
-              const factor = packAmountBase / 100;
-              return {
-                unit: isDrink ? "ml" : "g",
-                amount: round(packAmountBase, 0),
-                ...scaleObj(base, factor, 3),
-              };
-            }
-          })()
+        ? {
+            unit: packBaseUnit,
+            amount: round(packAmountBase, 0),
+            ...scale(packAmountBase / 100, 3),
+          }
         : null;
 
     return res.json({
@@ -309,8 +228,8 @@ app.post("/barcode", async (req, res) => {
       imageUrl,
       nutriScore: pickNutriScore(),
       pack: {
-        amountBase: packAmountBase,
-        baseUnit: isDrink ? "ml" : "g",
+        amountBase: packAmountBase != null ? round(packAmountBase, 0) : null,
+        baseUnit: packBaseUnit,
       },
       per1g,
       perOz,
