@@ -323,6 +323,65 @@ app.post("/barcode", async (req, res) => {
   }
 });
 
+// ---------------- CALORIES BURNED ROUTE ----------------
+app.post("/api/calories/burned", async (req, res) => {
+  try {
+    let { description, weightKg, age, sex } = req.body || {};
+
+    const input = [
+      {
+        role: "system",
+        content:
+          "You estimate calories burned from workouts. Be realistic and conservative.",
+      },
+      {
+        role: "user",
+        content: `
+description: ${description}
+weightKg: ${weightKg}
+age: ${age}
+sex: ${sex}
+
+Return JSON:
+{
+  "calories": number
+}
+`,
+      },
+    ];
+
+    const response = await client.responses.create({
+      model: "gpt-4o-mini",
+      input,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "calories_burned",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["calories"],
+            properties: {
+              calories: { type: "number" },
+            },
+          },
+        },
+      },
+      max_output_tokens: 100,
+    });
+
+    const text = (response.output_text || "").trim();
+    const parsed = JSON.parse(text);
+
+    return res.json({
+      calories: parsed.calories,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)
