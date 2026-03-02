@@ -148,6 +148,7 @@ app.post("/barcode", async (req, res) => {
       const x = normalizeUnit(u);
       return (
         x === "ml" ||
+        x === "L" ||
         x === "l" ||
         x === "cl" ||
         x === "dl" ||
