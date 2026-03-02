@@ -68,9 +68,7 @@ app.post("/barcode", async (req, res) => {
     };
 
     const normalizeUnit = (u) =>
-      typeof u === "string"
-        ? u.trim().toLowerCase().replace(/\./g, "")
-        : null;
+      typeof u === "string" ? u.trim().toLowerCase().replace(/\./g, "") : null;
 
     // base: food -> grams, drink -> ml
     const unitToBaseMultiplier = (unit, baseType) => {
@@ -145,60 +143,20 @@ app.post("/barcode", async (req, res) => {
       return g ? g.toUpperCase() : null; // A/B/C/D/E
     };
 
-    const hasAny100ml = () => {
-      const keys = Object.keys(n);
-      return keys.some((k) => k.endsWith("_100ml"));
-    };
-
-    const categoriesSuggestDrink = () => {
-      const tags = Array.isArray(p.categories_tags) ? p.categories_tags : [];
-      const catsStr =
-        typeof p.categories === "string" ? p.categories.toLowerCase() : "";
-      const hay = tags.join(" ").toLowerCase() + " " + catsStr;
-
+    // ---------- DETECT TYPE (ONLY product_quantity_unit) ----------
+    const isLiquidUnit = (u) => {
+      const x = normalizeUnit(u);
       return (
-        hay.includes("beverage") ||
-        hay.includes("beverages") ||
-        hay.includes("drink") ||
-        hay.includes("drinks") ||
-        hay.includes("en:beverages") ||
-        hay.includes("en:drinks") ||
-        hay.includes("en:soft-drinks") ||
-        hay.includes("en:juices") ||
-        hay.includes("en:water") ||
-        hay.includes("en:energy-drinks") ||
-        hay.includes("en:milk") ||
-        hay.includes("en:coffee") ||
-        hay.includes("en:tea")
+        x === "ml" ||
+        x === "l" ||
+        x === "cl" ||
+        x === "dl" ||
+        x === "floz" ||
+        x === "fl oz"
       );
     };
 
-    const unitSuggestDrink = () => {
-      const pu = normalizeUnit(p.product_quantity_unit);
-      const su = normalizeUnit(p.serving_quantity_unit);
-      const q = typeof p.quantity === "string" ? p.quantity.toLowerCase() : "";
-
-      const isLiquidUnit = (u) =>
-        u === "ml" ||
-        u === "l" ||
-        u === "cl" ||
-        u === "dl" ||
-        u === "floz" ||
-        u === "fl oz";
-
-      return (
-        isLiquidUnit(pu) ||
-        isLiquidUnit(su) ||
-        q.includes("ml") ||
-        q.includes(" l") ||
-        q.includes("cl") ||
-        q.includes("fl oz") ||
-        q.includes("floz")
-      );
-    };
-
-    // ---------- DETECT TYPE ----------
-    const isDrink = hasAny100ml() || unitSuggestDrink() || categoriesSuggestDrink();
+    const isDrink = isLiquidUnit(p.product_quantity_unit);
     const type = isDrink ? "drink" : "food";
     const baseType = isDrink ? "ml" : "g"; // package base
 
@@ -224,7 +182,8 @@ app.post("/barcode", async (req, res) => {
         ? "quantity_string"
         : "none";
 
-    // ---------- PER 100 BASE (internal only) ----------
+    // ---------- PER 100 BASE ----------
+    // choose correct nutriment suffix: _100g for food, _100ml for drink
     const suffix = isDrink ? "_100ml" : "_100g";
 
     const getKcalPer100 = () => {
@@ -251,7 +210,6 @@ app.post("/barcode", async (req, res) => {
       sodium: toNumber(n[`sodium${suffix}`]),
     };
 
-    // ---------- SCALE ----------
     const scale = (factor, decimals = 4) => ({
       calories: round(per100.calories != null ? per100.calories * factor : null, decimals),
       protein: round(per100.protein != null ? per100.protein * factor : null, decimals),
@@ -265,19 +223,16 @@ app.post("/barcode", async (req, res) => {
 
     // ---------- PER 1 BASE UNIT ----------
     // Food: 1g  | Drink: 1ml
-    const per1g = !isDrink ? { unit: "g", amount: 1, ...scale(1 / 100, 5) } : null;
-    const per1ml = isDrink ? { unit: "ml", amount: 1, ...scale(1 / 100, 5) } : null;
+    const per1g = !isDrink ? { unit: "g", amount: 1, ...scale(1 / 100, 6) } : null;
+    const per1ml = isDrink ? { unit: "ml", amount: 1, ...scale(1 / 100, 6) } : null;
 
     // ---------- 1 oz / 1 fl oz ----------
     const OZ_IN_G = 28.349523125;
     const FLOZ_IN_ML = 29.5735295625;
 
-    const perOz = !isDrink
-      ? { unit: "oz", amount: 1, ...scale(OZ_IN_G / 100, 3) }
-      : null;
-
+    const perOz = !isDrink ? { unit: "oz", amount: 1, ...scale(OZ_IN_G / 100, 4) } : null;
     const perFlOz = isDrink
-      ? { unit: "fl oz", amount: 1, ...scale(FLOZ_IN_ML / 100, 3) }
+      ? { unit: "fl oz", amount: 1, ...scale(FLOZ_IN_ML / 100, 4) }
       : null;
 
     // ---------- PER PACKAGE ----------
@@ -286,7 +241,7 @@ app.post("/barcode", async (req, res) => {
         ? {
             unit: isDrink ? "ml" : "g",
             amount: round(packAmountBase, 0),
-            ...scale(packAmountBase / 100, 2),
+            ...scale(packAmountBase / 100, 3),
           }
         : null;
 
@@ -312,71 +267,11 @@ app.post("/barcode", async (req, res) => {
         },
       },
 
-      // הכל ביחידות שביקשת:
-      per1g,     // אם זה food
-      per1ml,    // אם זה drink
-      perOz,     // אם זה food
-      perFlOz,   // אם זה drink
-      perPackage // אם הצלחנו להבין גודל חבילה
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
-
-// ---------------- CALORIES BURNED ROUTE ----------------
-app.post("/api/calories/burned", async (req, res) => {
-  try {
-    let { description, weightKg, age, sex } = req.body || {};
-
-    const input = [
-      {
-        role: "system",
-        content:
-          "You estimate calories burned from workouts. Be realistic and conservative.",
-      },
-      {
-        role: "user",
-        content: `
-description: ${description}
-weightKg: ${weightKg}
-age: ${age}
-sex: ${sex}
-
-Return JSON:
-{
-  "calories": number
-}
-`,
-      },
-    ];
-
-    const response = await client.responses.create({
-      model: "gpt-4o-mini",
-      input,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "calories_burned",
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            required: ["calories"],
-            properties: {
-              calories: { type: "number" },
-            },
-          },
-        },
-      },
-      max_output_tokens: 100,
-    });
-
-    const text = (response.output_text || "").trim();
-    const parsed = JSON.parse(text);
-
-    return res.json({
-      calories: parsed.calories,
+      per1g,
+      per1ml,
+      perOz,
+      perFlOz,
+      perPackage,
     });
   } catch (err) {
     console.error(err);
