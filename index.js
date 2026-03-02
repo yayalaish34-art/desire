@@ -223,6 +223,7 @@ app.post("/barcode", async (req, res) => {
 
     return res.json({
       type,
+      brand: p.brands_old,
       isDrink,
       name: pickName(),
       imageUrl,
