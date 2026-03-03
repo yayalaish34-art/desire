@@ -29,7 +29,7 @@ app.get("/", (req, res) => {
   res.json({ ok: true });
 });
 
-router.post("/analyze-meal", async (req, res) => {
+router.post("/analyze", async (req, res) => {
   try {
     const { imageBase64 } = req.body;
 
