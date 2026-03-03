@@ -29,7 +29,7 @@ app.get("/", (req, res) => {
   res.json({ ok: true });
 });
 
-router.post("/analyze", async (req, res) => {
+app.post("/analyze", async (req, res) => {
   try {
     const { imageBase64 } = req.body;
 
@@ -186,7 +186,7 @@ STRICT RULES
 
       response = await client.chat.completions.create({
         ...requestBody,
-        model: "gpt-4o-nano",
+        model: "gpt-4.1-nano",
       });
     }
 
