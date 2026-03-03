@@ -169,7 +169,7 @@ STRICT RULES
             {
               type: "image_url",
               image_url: {
-                url: `data:${mimeType};base64,${imageBase64}`
+                url: `data:image/jpeg;base64,${imageBase64}`
               },
             },
           ],
