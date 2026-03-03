@@ -29,6 +29,184 @@ app.get("/", (req, res) => {
   res.json({ ok: true });
 });
 
+router.post("/analyze-meal", async (req, res) => {
+  try {
+    const { imageBase64 } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: "imageBase64 is required" });
+    }
+
+    const systemPrompt = `
+You are an advanced food vision and nutrition estimation AI.
+
+Your job is to carefully analyze a meal image and return structured nutrition data.
+
+----------------------
+CORE TASKS
+----------------------
+
+1. Identify all clearly visible food items separately.
+2. Estimate portion size in grams for each item.
+3. Estimate calories per item realistically.
+4. Estimate protein, carbs, and fats per item internally.
+5. Calculate total macros using:
+   - Protein: 4 calories per gram
+   - Carbs: 4 calories per gram
+   - Fats: 9 calories per gram
+6. Ensure totals are internally consistent.
+
+Be conservative if uncertain. Do NOT invent invisible ingredients.
+
+----------------------
+TITLE LOGIC
+----------------------
+
+Build the title dynamically based on number of main visible ingredients:
+
+If 1 item:
+- Use only the food name.
+Example:
+"Grilled Salmon"
+
+If 2 items:
+- Format: "X with Y"
+Example:
+"Chicken with Rice"
+
+If 3 items:
+- Format: "X, Y, and Z"
+Example:
+"Chicken, Rice, and Broccoli"
+
+If 4 items:
+- Format: "X, Y, Z, and W Bowl"
+Example:
+"Chicken, Rice, Broccoli, and Avocado Bowl"
+
+If 5 items:
+- Format: "Loaded X Bowl with Y, Z, W, and V"
+Example:
+"Loaded Chicken Bowl with Rice, Beans, Corn, and Guacamole"
+
+If 6 or more items:
+- Format: "Mixed Protein Bowl with X, Y, Z, and more"
+Example:
+"Mixed Protein Bowl with Chicken, Beef, Rice, and more"
+
+Culinary naming rules:
+- If grilled appearance → use "Grilled"
+- If chopped and mixed → use "Bowl"
+- If pan-cooked → use "Skillet"
+- If plated components → use "Plate"
+- If breakfast style → use "Breakfast Bowl"
+- If dessert style → use "Sweet Plate"
+
+Rules:
+- Use most visually dominant ingredients first.
+- Do not invent ingredients.
+- Do not use generic titles like "Healthy Meal".
+- Use proper capitalization.
+
+----------------------
+RESPONSE FORMAT
+----------------------
+
+Return STRICT JSON in this format:
+
+{
+  "title": "",
+  "items": [
+    {
+      "name": "",
+      "estimated_grams": 0,
+      "calories": 0
+    }
+  ],
+  "macros": {
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fats": 0
+  }
+}
+
+----------------------
+STRICT RULES
+----------------------
+
+- Only return valid JSON.
+- No explanations.
+- No extra text.
+- All numbers must be integers.
+- No units next to numbers.
+- Macros are in grams except calories.
+- Total calories must approximately equal:
+  (protein*4 + carbs*4 + fats*9)
+- If image is not food, return:
+
+{
+  "title": "Not a Food Item",
+  "items": [],
+  "macros": {
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fats": 0
+  }
+}
+`;
+
+    const requestBody = {
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyze this meal." },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    let response;
+
+    try {
+      response = await client.chat.completions.create(requestBody);
+    } catch (err) {
+      console.log("Mini failed, switching to nano...");
+
+      response = await client.chat.completions.create({
+        ...requestBody,
+        model: "gpt-4o-nano",
+      });
+    }
+
+    const content = response.choices[0].message.content;
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      return res.status(500).json({ error: "Invalid JSON returned from model" });
+    }
+
+    res.json(parsed);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 // ---------------- BARCODE ROUTE ----------------
 app.post("/barcode", async (req, res) => {
   try {
@@ -243,64 +421,7 @@ app.post("/barcode", async (req, res) => {
   }
 });
 
-// ---------------- CALORIES BURNED ROUTE ----------------
-app.post("/api/calories/burned", async (req, res) => {
-  try {
-    let { description, weightKg, age, sex } = req.body || {};
 
-    const input = [
-      {
-        role: "system",
-        content:
-          "You estimate calories burned from workouts. Be realistic and conservative.",
-      },
-      {
-        role: "user",
-        content: `
-description: ${description}
-weightKg: ${weightKg}
-age: ${age}
-sex: ${sex}
-
-Return JSON:
-{
-  "calories": number
-}
-`,
-      },
-    ];
-
-    const response = await client.responses.create({
-      model: "gpt-4o-mini",
-      input,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "calories_burned",
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            required: ["calories"],
-            properties: {
-              calories: { type: "number" },
-            },
-          },
-        },
-      },
-      max_output_tokens: 100,
-    });
-
-    const text = (response.output_text || "").trim();
-    const parsed = JSON.parse(text);
-
-    return res.json({
-      calories: parsed.calories,
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
