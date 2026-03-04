@@ -87,21 +87,24 @@ RESPONSE FORMAT
 Return STRICT JSON in this format:
 
 {
-"title": "",
-"nutri_score": "",
-"items": [
-{
-"name": "",
-"estimated_grams": 0,
-"calories": 0
-}
-],
-"macros": {
-"calories": 0,
-"protein": 0,
-"carbs": 0,
-"fats": 0
-}
+  "title": "",
+  "nutri_score": "",
+  "items": [
+    {
+      "name": "",
+      "estimated_grams": 0,
+      "calories": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fats": 0
+    }
+  ],
+  "macros": {
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fats": 0
+  }
 }
 
 STRICT RULES
@@ -121,20 +124,20 @@ Macros are in grams except calories.
 Nutri-Score must be one of: A, B, C, D, E.
 
 Total calories must approximately equal:
-(protein4 + carbs4 + fats*9)
+(protein*4 + carbs*4 + fats*9)
 
 If image is not food, return:
 
 {
-"title": "Not a Food Item",
-"nutri_score": "E",
-"items": [],
-"macros": {
-"calories": 0,
-"protein": 0,
-"carbs": 0,
-"fats": 0
-}
+  "title": "Not a Food Item",
+  "nutri_score": "E",
+  "items": [],
+  "macros": {
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fats": 0
+  }
 }`;
 
     const requestBody = {
@@ -149,7 +152,7 @@ If image is not food, return:
             {
               type: "image_url",
               image_url: {
-                url: `data:image/jpeg;base64,${imageBase64}`
+                url: `data:image/jpeg;base64,${imageBase64}`,
               },
             },
           ],
