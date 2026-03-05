@@ -169,8 +169,7 @@ app.post("/analyze_text", async (req, res) => {
         { role: "system", content: NUTRITION_SYSTEM_PROMPT },
         {
           role: "user",
-          content:
-            `Here is the user's text. Treat it as a brief description of a meal or product:\n\n${text.trim()}`,
+          content: `Here is the user's text describing a meal:\n\n${text.trim()}`,
         },
       ],
       response_format: {
@@ -180,33 +179,28 @@ app.post("/analyze_text", async (req, res) => {
     });
 
     const jsonText = response.output_text?.trim();
-    if (!jsonText) return res.status(502).json({ error: "Model returned empty output" });
 
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch {
-      return res.status(502).json({ error: "Invalid JSON from model", raw: jsonText });
-    }
+    if (!jsonText)
+      return res.status(502).json({ error: "Model returned empty output" });
 
-    return res.json({
-      input: text.trim(),
-      result: parsed,
-    });
+    const parsed = JSON.parse(jsonText);
+
+    return res.json(parsed);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Server error", details: String(err?.message || err) });
+    return res.status(500).json({ error: "Server error" });
   }
 });
-
 // --- Endpoint ---
 app.post("/analyze_audio", upload.single("file"), async (req, res) => {
   const filePath = req.file?.path;
 
   try {
-    if (!filePath) return res.status(400).json({ error: "Missing audio file. Use field name: file" });
+    if (!filePath)
+      return res
+        .status(400)
+        .json({ error: "Missing audio file. Use field name: file" });
 
-    // 1) Speech -> Text (cheapest)
     const transcription = await client.audio.transcriptions.create({
       model: "gpt-4o-mini-transcribe",
       file: fs.createReadStream(filePath),
@@ -214,18 +208,17 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
     });
 
     const transcriptText = transcription?.text?.trim();
-    if (!transcriptText) return res.status(502).json({ error: "Empty transcription result" });
 
-    // 2) Text -> Nutrition JSON (Structured Output)
+    if (!transcriptText)
+      return res.status(502).json({ error: "Empty transcription result" });
+
     const response = await client.responses.create({
       model: "gpt-4o-mini",
       input: [
         { role: "system", content: NUTRITION_SYSTEM_PROMPT },
         {
           role: "user",
-          content:
-            `Here is the user's short text (transcribed from audio). ` +
-            `Treat it as a brief description of a meal or product:\n\n${transcriptText}`,
+          content: `Here is the user's meal description:\n\n${transcriptText}`,
         },
       ],
       response_format: {
@@ -234,27 +227,18 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
       },
     });
 
-    // Most reliable: take output_text (should be pure JSON), parse it, return object
     const jsonText = response.output_text?.trim();
-    if (!jsonText) return res.status(502).json({ error: "Model returned empty output" });
 
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch {
-      // Fallback: return raw if parsing fails (should be rare with json_schema)
-      return res.status(502).json({ error: "Invalid JSON from model", raw: jsonText });
-    }
+    if (!jsonText)
+      return res.status(502).json({ error: "Model returned empty output" });
 
-    return res.json({
-      transcript: transcriptText,
-      result: parsed,
-    });
+    const parsed = JSON.parse(jsonText);
+
+    return res.json(parsed);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Server error", details: String(err?.message || err) });
+    return res.status(500).json({ error: "Server error" });
   } finally {
-    // Cleanup uploaded file
     if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 });
