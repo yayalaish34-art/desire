@@ -31,7 +31,6 @@ app.get("/", (req, res) => {
   res.json({ ok: true });
 });
 
-
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -43,38 +42,32 @@ const upload = multer({
       cb(null, safe);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-// --- Your system prompt (as-is) ---
 const NUTRITION_SYSTEM_PROMPT = `
-You are an advanced food  nutrition estimation AI.
+You are an advanced food nutrition estimation AI.
 
-Your job is to carefully analyze a meal image and return structured nutrition data.
+Your job is to carefully analyze a meal description and return structured nutrition data.
 
 CORE TASKS:
-Identify all clearly visible food items separately.
+Identify all food items separately.
 Estimate portion size in grams for each item.
 Estimate calories per item realistically.
-Estimate protein, carbs, and fats per item internally.
+Estimate protein, carbs, and fats per item.
 Calculate total macros using:
 Protein: 4 calories per gram
 Carbs: 4 calories per gram
 Fats: 9 calories per gram
 Ensure totals are internally consistent.
-Estimate a realistic Nutri-Score (A/B/C/D/E) for the overall meal based on nutritional quality (fiber, protein quality, processing level, saturated fat, sugar, overall balance). Be honest and conservative — do not artificially improve the score.
-Be conservative if uncertain. Do NOT invent invisible ingredients.
-TITLE RULE
-Create a short, natural-sounding title (a few words only) that clearly describes the visible main ingredients and the type of dish.
+Estimate a realistic Nutri-Score (A/B/C/D/E) for the overall meal.
+Be conservative if uncertain. Do NOT invent ingredients.
 
-Rules:
-The title must reflect the actual visible ingredients.
-Do not invent ingredients.
-Do not use generic titles like "Healthy Meal".
-Keep it concise and descriptive.
+TITLE RULE:
+Create a short, natural-sounding title (a few words only) that clearly describes the meal.
 Use proper capitalization.
-RESPONSE FORMAT
-Return STRICT JSON in this format:
+
+RESPONSE FORMAT - Return STRICT JSON only, no extra text:
 
 {
   "title": "",
@@ -97,64 +90,13 @@ Return STRICT JSON in this format:
   }
 }
 
-STRICT RULES
-Only return valid JSON.
-No explanations.
-No extra text.
-All numbers must be integers.
-No units next to numbers.
-Macros are in grams except calories.
+STRICT RULES:
+Only return valid JSON. No explanations. No extra text.
+All numbers must be integers. No units next to numbers.
 Nutri-Score must be one of: A, B, C, D, E.
-Total calories must approximately equal:
-(protein*4 + carbs*4 + fats*9)
 `.trim();
 
-// --- JSON Schema for Structured Outputs ---
-const nutritionSchema = {
-  name: "nutrition_result",
-  strict: true,
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    required: ["title", "nutri_score", "items", "macros"],
-    properties: {
-      title: { type: "string" },
-      nutri_score: { type: "string", enum: ["A", "B", "C", "D", "E"] },
-      items: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["name", "estimated_grams", "calories", "protein", "carbs", "fats"],
-          properties: {
-            name: { type: "string" },
-            estimated_grams: { type: "integer" },
-            calories: { type: "integer" },
-            protein: { type: "integer" },
-            carbs: { type: "integer" },
-            fats: { type: "integer" },
-          },
-        },
-      },
-      macros: {
-        type: "object",
-        additionalProperties: false,
-        required: ["calories", "protein", "carbs", "fats"],
-        properties: {
-          calories: { type: "integer" },
-          protein: { type: "integer" },
-          carbs: { type: "integer" },
-          fats: { type: "integer" },
-        },
-      },
-    },
-  },
-};
-
-
 // ---------------- ANALYZE TEXT ROUTE ----------------
-// Body: { "text": "..." }
 app.post("/analyze_text", async (req, res) => {
   try {
     const { text } = req.body;
@@ -163,43 +105,38 @@ app.post("/analyze_text", async (req, res) => {
       return res.status(400).json({ error: "text is required" });
     }
 
-    const response = await client.responses.create({
+    const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      input: [
+      messages: [
         { role: "system", content: NUTRITION_SYSTEM_PROMPT },
         {
           role: "user",
-          content: `Here is the user's text describing a meal:\n\n${text.trim()}`,
+          content: `Here is the user's meal description:\n\n${text.trim()}`,
         },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: nutritionSchema,
-      },
+      response_format: { type: "json_object" },
     });
 
-    const jsonText = response.output_text?.trim();
+    const jsonText = response.choices[0].message.content?.trim();
 
     if (!jsonText)
       return res.status(502).json({ error: "Model returned empty output" });
 
     const parsed = JSON.parse(jsonText);
-
     return res.json(parsed);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server error" });
   }
 });
-// --- Endpoint ---
+
+// ---------------- ANALYZE AUDIO ROUTE ----------------
 app.post("/analyze_audio", upload.single("file"), async (req, res) => {
   const filePath = req.file?.path;
 
   try {
     if (!filePath)
-      return res
-        .status(400)
-        .json({ error: "Missing audio file. Use field name: file" });
+      return res.status(400).json({ error: "Missing audio file. Use field name: file" });
 
     const transcription = await client.audio.transcriptions.create({
       model: "gpt-4o-mini-transcribe",
@@ -212,28 +149,24 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
     if (!transcriptText)
       return res.status(502).json({ error: "Empty transcription result" });
 
-    const response = await client.responses.create({
+    const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      input: [
+      messages: [
         { role: "system", content: NUTRITION_SYSTEM_PROMPT },
         {
           role: "user",
           content: `Here is the user's meal description:\n\n${transcriptText}`,
         },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: nutritionSchema,
-      },
+      response_format: { type: "json_object" },
     });
 
-    const jsonText = response.output_text?.trim();
+    const jsonText = response.choices[0].message.content?.trim();
 
     if (!jsonText)
       return res.status(502).json({ error: "Model returned empty output" });
 
     const parsed = JSON.parse(jsonText);
-
     return res.json(parsed);
   } catch (err) {
     console.error(err);
