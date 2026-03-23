@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+
 dotenv.config();
 
 const app = express();
@@ -31,6 +32,7 @@ app.get("/", (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------- UPLOAD SETUP ----------------
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -38,13 +40,15 @@ const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
     filename: (req, file, cb) => {
-      const safe = Date.now() + "-" + file.originalname.replace(/[^\w.\-]/g, "_");
+      const safe =
+        Date.now() + "-" + file.originalname.replace(/[^\w.\-]/g, "_");
       cb(null, safe);
     },
   }),
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
+// ---------------- NUTRITION PROMPT ----------------
 const NUTRITION_SYSTEM_PROMPT = `
 You are an advanced food nutrition estimation AI.
 
@@ -96,6 +100,365 @@ All numbers must be integers. No units next to numbers.
 Nutri-Score must be one of: A, B, C, D, E.
 `.trim();
 
+// ---------------- FACE ANALYSIS PROMPT ----------------
+const FACE_SYSTEM_PROMPT = `
+You are a face analysis AI for a feminine glow up app.
+
+Your role is to gently analyze a user’s face and guide them into a 90-day glow up journey.
+
+Your tone should feel like a soft, supportive beauty coach.
+
+TONE
+- feminine
+- soft
+- warm
+- supportive
+- encouraging
+- slightly aspirational
+- never harsh
+- never critical
+- never overly clinical
+
+IMPORTANT
+Focus only on areas that can realistically improve with:
+- daily habits
+- simple routines
+- face exercises
+
+Do NOT include:
+- acne
+- medical skin conditions
+- anything that cannot change with habits
+
+ALLOWED FOCUS AREAS
+You MUST choose exactly 3 areas from this list:
+- jawline
+- cheeks
+- eyes
+- lips
+- eyebrows
+- symmetry
+
+GOAL
+Select the 3 most relevant areas to focus on for the next 90 days.
+
+Each area should feel:
+- personal
+- positive
+- actionable
+- part of a guided transformation
+
+FIELD RULES
+
+For each focus area:
+
+target:
+- must be one of the allowed targets
+
+title:
+- short (2–5 words)
+- feminine and aspirational
+
+Examples:
+- "Softly sculpted jawline"
+- "Brighter, fresh eyes"
+- "Lifted, fuller cheeks"
+- "Beautifully framed brows"
+- "Softer, fuller lips"
+- "More balanced harmony"
+
+why_this_area:
+- explain softly why this area is being focused on
+- never sound negative
+- make it feel like potential, not a flaw
+- 1 sentence only
+
+Examples:
+- "This area has beautiful potential to become more defined and balanced."
+- "This area can become brighter and more open with the right focus."
+
+journey:
+- MUST describe what will happen over the next 90 days
+- MUST include:
+  - "over the next 90 days"
+  - daily habits
+  - face exercises or routines tailored to this area
+- MUST sound soft and guided
+- MUST be exactly 1 sentence
+
+STYLE:
+Use phrasing like:
+- "we’ll gently work on..."
+- "we’ll focus on..."
+- "we’ll support this area..."
+
+Examples:
+- "Over the next 90 days, we’ll gently work on shaping and defining this area with daily habits and face exercises tailored to you."
+- "Over the next 90 days, we’ll support this area with simple daily routines and targeted exercises to help it look more lifted and refreshed."
+
+future_vision:
+- describe how this area may look after 90 days
+- soft, feminine, natural beauty tone
+- not exaggerated
+- 1 sentence only
+
+Examples:
+- "This area can look more softly sculpted, balanced, and naturally defined."
+- "This area can appear brighter, fresher, and naturally radiant."
+
+FACE METRICS
+Also analyze the face and return the following scores from 0 to 100:
+
+- skin_score -> overall skin quality
+- hydration -> how hydrated the skin looks
+- texture -> smoothness of the skin
+- firmness -> how firm / lifted the skin appears
+- smoothness -> how even and refined the skin surface looks
+- glow_level -> how radiant and glowing the skin looks
+- eye_freshness -> how awake and fresh the eyes look
+- face_definition -> how defined the facial structure looks
+- symmetry -> how balanced the face appears
+
+All values must be integers from 0 to 100.
+
+SKIN AGE
+Return:
+- skin_age -> estimated skin age as a realistic number
+
+SCORING GUIDELINES
+- Keep scores realistic
+- Do not give all high scores
+- Do not exaggerate
+
+OUTPUT
+
+Return JSON only in this exact format:
+
+{
+  "focus_areas": [
+    {
+      "target": "",
+      "title": "",
+      "why_this_area": "",
+      "journey": "",
+      "future_vision": ""
+    },
+    {
+      "target": "",
+      "title": "",
+      "why_this_area": "",
+      "journey": "",
+      "future_vision": ""
+    },
+    {
+      "target": "",
+      "title": "",
+      "why_this_area": "",
+      "journey": "",
+      "future_vision": ""
+    }
+  ],
+  "skin_score": 0,
+  "skin_age": 0,
+  "metrics": {
+    "hydration": 0,
+    "texture": 0,
+    "firmness": 0,
+    "smoothness": 0,
+    "glow_level": 0,
+    "eye_freshness": 0,
+    "face_definition": 0,
+    "symmetry": 0
+  }
+}
+
+RULES
+- Return valid JSON only
+- No markdown
+- No explanations
+- No extra text
+- Exactly 3 focus areas
+- All scores must be integers
+- Use simple English
+- Keep tone soft and supportive
+- Do not mention acne or medical issues
+
+If no face is clearly visible, return:
+{
+  "error": "no_face_detected"
+}
+`.trim();
+
+// ---------------- HELPERS ----------------
+const ALLOWED_FOCUS_TARGETS = [
+  "jawline",
+  "cheeks",
+  "eyes",
+  "lips",
+  "eyebrows",
+  "symmetry",
+];
+
+const DEFAULT_FOCUS_AREAS = [
+  {
+    target: "jawline",
+    title: "Softly sculpted jawline",
+    why_this_area:
+      "This area has beautiful potential to become more defined and balanced.",
+    journey:
+      "Over the next 90 days, we’ll gently work on shaping and defining this area with daily habits and face exercises tailored to you.",
+    future_vision:
+      "This area can look more softly sculpted, balanced, and naturally defined.",
+  },
+  {
+    target: "eyes",
+    title: "Brighter, fresh eyes",
+    why_this_area:
+      "This area can become brighter and more open with the right focus.",
+    journey:
+      "Over the next 90 days, we’ll support this area with simple daily routines and targeted exercises to help it look more awake.",
+    future_vision:
+      "This area can appear brighter, fresher, and naturally radiant.",
+  },
+  {
+    target: "cheeks",
+    title: "Lifted, fuller cheeks",
+    why_this_area:
+      "This area has lovely potential to look more lifted and shaped.",
+    journey:
+      "Over the next 90 days, we’ll gently focus on lifting and shaping this area with daily habits and face exercises tailored to you.",
+    future_vision:
+      "This area can look more lifted, soft, and naturally sculpted.",
+  },
+];
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function cleanShortText(value, fallback = "") {
+  if (!isNonEmptyString(value)) return fallback;
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function pickFocusTarget(value, fallback = "") {
+  if (!isNonEmptyString(value)) return fallback;
+  const normalized = value.trim().toLowerCase();
+  return ALLOWED_FOCUS_TARGETS.includes(normalized) ? normalized : fallback;
+}
+
+function clampScore(value, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(num)));
+}
+
+function clampSkinAge(value, fallback = 25) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(10, Math.min(80, Math.round(num)));
+}
+
+function normalizeFocusAreas(focusAreas) {
+  const input = Array.isArray(focusAreas) ? focusAreas : [];
+  const normalized = [];
+  const usedTargets = new Set();
+
+  for (const item of input) {
+    if (!item || typeof item !== "object") continue;
+
+    const target = pickFocusTarget(item.target, "");
+    if (!target || usedTargets.has(target)) continue;
+
+    const fallback =
+      DEFAULT_FOCUS_AREAS[normalized.length] || DEFAULT_FOCUS_AREAS[0];
+
+    normalized.push({
+      target,
+      title: cleanShortText(item.title, fallback.title),
+      why_this_area: cleanShortText(
+        item.why_this_area,
+        fallback.why_this_area
+      ),
+      journey: cleanShortText(item.journey, fallback.journey),
+      future_vision: cleanShortText(
+        item.future_vision,
+        fallback.future_vision
+      ),
+    });
+
+    usedTargets.add(target);
+    if (normalized.length === 3) break;
+  }
+
+  for (const fallback of DEFAULT_FOCUS_AREAS) {
+    if (normalized.length === 3) break;
+    if (usedTargets.has(fallback.target)) continue;
+
+    normalized.push({ ...fallback });
+    usedTargets.add(fallback.target);
+  }
+
+  return normalized;
+}
+
+function normalizeFaceAnalysis(parsed) {
+  return {
+    focus_areas: normalizeFocusAreas(parsed?.focus_areas),
+    skin_score: clampScore(parsed?.skin_score, 75),
+    skin_age: clampSkinAge(parsed?.skin_age, 25),
+    metrics: {
+      hydration: clampScore(parsed?.metrics?.hydration, 75),
+      texture: clampScore(parsed?.metrics?.texture, 75),
+      firmness: clampScore(parsed?.metrics?.firmness, 75),
+      smoothness: clampScore(parsed?.metrics?.smoothness, 75),
+      glow_level: clampScore(parsed?.metrics?.glow_level, 75),
+      eye_freshness: clampScore(parsed?.metrics?.eye_freshness, 75),
+      face_definition: clampScore(parsed?.metrics?.face_definition, 75),
+      symmetry: clampScore(parsed?.metrics?.symmetry, 75),
+    },
+  };
+}
+
+async function runFaceAnalysis(imageBase64) {
+  const requestBody = {
+    model: "gpt-4.1-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: FACE_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Analyze this face for a feminine 90-day glow up plan.",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`,
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    return await client.chat.completions.create(requestBody);
+  } catch (error) {
+    console.log("gpt-4.1-mini failed, switching to gpt-4.1-nano...");
+
+    return await client.chat.completions.create({
+      ...requestBody,
+      model: "gpt-4.1-nano",
+    });
+  }
+}
+
 // ---------------- ANALYZE TEXT ROUTE ----------------
 app.post("/analyze_text", async (req, res) => {
   try {
@@ -119,8 +482,9 @@ app.post("/analyze_text", async (req, res) => {
 
     const jsonText = response.choices[0].message.content?.trim();
 
-    if (!jsonText)
+    if (!jsonText) {
       return res.status(502).json({ error: "Model returned empty output" });
+    }
 
     const parsed = JSON.parse(jsonText);
     return res.json(parsed);
@@ -135,8 +499,11 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
   const filePath = req.file?.path;
 
   try {
-    if (!filePath)
-      return res.status(400).json({ error: "Missing audio file. Use field name: file" });
+    if (!filePath) {
+      return res
+        .status(400)
+        .json({ error: "Missing audio file. Use field name: file" });
+    }
 
     const transcription = await client.audio.transcriptions.create({
       model: "gpt-4o-mini-transcribe",
@@ -146,8 +513,9 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
 
     const transcriptText = transcription?.text?.trim();
 
-    if (!transcriptText)
+    if (!transcriptText) {
       return res.status(502).json({ error: "Empty transcription result" });
+    }
 
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
@@ -163,8 +531,9 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
 
     const jsonText = response.choices[0].message.content?.trim();
 
-    if (!jsonText)
+    if (!jsonText) {
       return res.status(502).json({ error: "Model returned empty output" });
+    }
 
     const parsed = JSON.parse(jsonText);
     return res.json(parsed);
@@ -176,7 +545,7 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
   }
 });
 
-
+// ---------------- ANALYZE FOOD IMAGE ROUTE ----------------
 app.post("/analyze", async (req, res) => {
   try {
     const { imageBase64 } = req.body;
@@ -261,7 +630,7 @@ If image is not food, return:
     "carbs": 0,
     "fats": 0
   }
-}`;
+}`.trim();
 
     const requestBody = {
       model: "gpt-4o-mini",
@@ -296,28 +665,90 @@ If image is not food, return:
       });
     }
 
-    const content = response.choices[0].message.content;
+    const content = response?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      return res.status(502).json({ error: "Empty response from model" });
+    }
 
     let parsed;
     try {
       parsed = JSON.parse(content);
-    } catch (e) {
-      return res.status(500).json({ error: "Invalid JSON returned from model" });
+    } catch {
+      return res
+        .status(500)
+        .json({ error: "Invalid JSON returned from model" });
     }
 
-    res.json(parsed);
+    return res.json(parsed);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
+// ---------------- ANALYZE FACE ROUTE ----------------
+app.post("/analyze_face", async (req, res) => {
+  try {
+    const imageBase64 = req.body?.imageBase64;
+
+    if (!isNonEmptyString(imageBase64)) {
+      return res.status(400).json({
+        success: false,
+        error: "missing_image_base64",
+      });
+    }
+
+    const response = await runFaceAnalysis(imageBase64.trim());
+    const content = response?.choices?.[0]?.message?.content;
+
+    if (!isNonEmptyString(content)) {
+      return res.status(502).json({
+        success: false,
+        error: "empty_model_response",
+      });
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      return res.status(502).json({
+        success: false,
+        error: "invalid_json_from_model",
+      });
+    }
+
+    if (parsed?.error === "no_face_detected") {
+      return res.status(200).json({
+        success: false,
+        error: "no_face_detected",
+      });
+    }
+
+    const analysis = normalizeFaceAnalysis(parsed);
+
+    return res.status(200).json({
+      success: true,
+      analysis,
+    });
+  } catch (error) {
+    console.error("analyze-face error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "server_error",
+    });
+  }
+});
 
 // ---------------- BARCODE ROUTE ----------------
 app.post("/barcode", async (req, res) => {
   try {
     const { barcode } = req.body;
-    if (!barcode) return res.status(400).json({ error: "barcode is required" });
+    if (!barcode) {
+      return res.status(400).json({ error: "barcode is required" });
+    }
 
     const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`;
 
@@ -325,16 +756,18 @@ app.post("/barcode", async (req, res) => {
       headers: { "User-Agent": "EatLessLab/1.0 (contact: you@example.com)" },
     });
 
-    if (!r.ok) return res.status(502).json({ error: "OpenFoodFacts error" });
+    if (!r.ok) {
+      return res.status(502).json({ error: "OpenFoodFacts error" });
+    }
 
     const data = await r.json();
-    if (data?.status !== 1 || !data?.product)
+    if (data?.status !== 1 || !data?.product) {
       return res.status(404).json({ error: "Product not found" });
+    }
 
     const p = data.product;
     const n = p.nutriments || {};
 
-    // ---------- helpers ----------
     const toNumber = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
     const round = (v, decimals = 4) => {
@@ -348,21 +781,25 @@ app.post("/barcode", async (req, res) => {
 
     const isLiquidUnit = (u) => {
       const x = normalizeUnit(u);
-      return x === "ml" || x === "l" || x === "cl" || x === "dl" || x === "floz" || x === "fl oz";
+      return (
+        x === "ml" ||
+        x === "l" ||
+        x === "cl" ||
+        x === "dl" ||
+        x === "floz" ||
+        x === "fl oz"
+      );
     };
 
-    // 1ml = 1g assumption is baked into this conversion table
     const unitToMlOrGMultiplier = (unit) => {
       const u = normalizeUnit(unit);
       if (!u) return null;
 
-      // mass
       if (u === "g") return 1;
       if (u === "kg") return 1000;
       if (u === "mg") return 0.001;
       if (u === "oz") return 28.349523125;
 
-      // volume
       if (u === "ml") return 1;
       if (u === "l") return 1000;
       if (u === "cl") return 10;
@@ -377,7 +814,9 @@ app.post("/barcode", async (req, res) => {
       let s = quantityStr.toLowerCase().replace(",", ".").trim();
       s = s.replace(/\s+/g, " ");
 
-      const m = s.match(/(\d+(\.\d+)?)\s*(kg|g|mg|ml|l|cl|dl|fl oz|floz|oz)\b/);
+      const m = s.match(
+        /(\d+(\.\d+)?)\s*(kg|g|mg|ml|l|cl|dl|fl oz|floz|oz)\b/
+      );
       if (!m) return null;
 
       const amount = Number(m[1]);
@@ -385,7 +824,7 @@ app.post("/barcode", async (req, res) => {
       const mul = unitToMlOrGMultiplier(unit);
       if (!mul) return null;
 
-      return amount * mul; // returns "base amount" in ml-or-g numeric space
+      return amount * mul;
     };
 
     const pickName = () =>
@@ -403,7 +842,6 @@ app.post("/barcode", async (req, res) => {
       return g ? g.toUpperCase() : null;
     };
 
-    // ---------- product image ----------
     const imageUrl =
       p.image_front_url ||
       p.image_front_small_url ||
@@ -411,11 +849,9 @@ app.post("/barcode", async (req, res) => {
       p.image_small_url ||
       null;
 
-    // ---------- detect type ----------
     const isDrink = isLiquidUnit(p.product_quantity_unit);
     const type = isDrink ? "drink" : "food";
 
-    // ---------- pack amount (ml for drinks, g for food; numeric is same space due to 1ml=1g assumption) ----------
     const packFromProductQuantity = (() => {
       const qty = toNumber(p.product_quantity);
       if (qty == null) return null;
@@ -426,16 +862,14 @@ app.post("/barcode", async (req, res) => {
 
     const packFromQuantityString = parseQuantityString(p.quantity);
     const packAmountBase = packFromProductQuantity ?? packFromQuantityString ?? null;
-
     const packBaseUnit = isDrink ? "ml" : "g";
 
-    // ---------- nutriments per100 ----------
-    // Drinks: prefer _100ml, fallback to _100g
-    // Food: use _100g (fallback to _100ml if exists for weird cases)
     const getPer100 = () => {
       const pick = (key) => {
         if (isDrink) {
-          return toNumber(n[`${key}_100ml`]) ?? toNumber(n[`${key}_100g`]) ?? null;
+          return (
+            toNumber(n[`${key}_100ml`]) ?? toNumber(n[`${key}_100g`]) ?? null
+          );
         }
         return toNumber(n[`${key}_100g`]) ?? toNumber(n[`${key}_100ml`]) ?? null;
       };
@@ -456,7 +890,6 @@ app.post("/barcode", async (req, res) => {
         };
       }
 
-      // kcal missing -> try kJ
       const kj =
         (isDrink
           ? toNumber(n["energy-kj_100ml"]) ??
@@ -480,21 +913,24 @@ app.post("/barcode", async (req, res) => {
     const per100 = getPer100();
 
     const scale = (factor, decimals = 4) => ({
-      calories: per100.calories == null ? null : round(per100.calories * factor, decimals),
-      protein: per100.protein == null ? null : round(per100.protein * factor, decimals),
+      calories:
+        per100.calories == null ? null : round(per100.calories * factor, decimals),
+      protein:
+        per100.protein == null ? null : round(per100.protein * factor, decimals),
       carbs: per100.carbs == null ? null : round(per100.carbs * factor, decimals),
       fat: per100.fat == null ? null : round(per100.fat * factor, decimals),
       salt: per100.salt == null ? null : round(per100.salt * factor, decimals),
     });
 
-    // ---------- outputs (same fields) ----------
     const per1g = !isDrink ? { unit: "g", amount: 1, ...scale(1 / 100, 6) } : null;
 
     const perOz = !isDrink
       ? { unit: "oz", amount: 1, ...scale(28.349523125 / 100, 4) }
       : null;
 
-    const perCup250ml = isDrink ? { unit: "ml", amount: 250, ...scale(250 / 100, 3) } : null;
+    const perCup250ml = isDrink
+      ? { unit: "ml", amount: 250, ...scale(250 / 100, 3) }
+      : null;
 
     const perPackage =
       packAmountBase != null
@@ -526,8 +962,6 @@ app.post("/barcode", async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
-
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
