@@ -202,42 +202,48 @@ All values must be integers.
 
 SCORING SCALE (VERY IMPORTANT)
 
-Use this scale for ALL metrics:
-
-0–20 = very low / weak / clearly lacking  
+0–20 = very low / weak  
 21–40 = below average  
 41–60 = average  
-61–80 = good / healthy  
-81–100 = excellent / very strong  
+61–80 = good  
+81–100 = excellent  
 
 Each score MUST reflect visible differences.
 
 SCORING BEHAVIOR (CRITICAL)
 
-- Do NOT cluster scores between 45–60
-- Use the full 0–100 range when justified
-- Low scores are allowed
-- High scores are allowed
 - Scores MUST vary across metrics
 - Avoid giving similar values to all metrics
-- Prefer at least 8–15 point differences between weaker and stronger areas
-- If uncertain, choose a direction (slightly lower or higher), NOT the middle
+- Use the full 0–100 range when justified
 - Each metric MUST be based on a different visible cue
+- If uncertain, choose a direction (slightly lower or higher), NOT the middle
 
-METRIC HINTS (HOW TO DIFFERENTIATE)
+DISTRIBUTION RULE (VERY IMPORTANT)
 
-- hydration → plumpness, skin bounce, dryness vs fullness  
-- texture → visible surface detail, pores, irregularity  
-- smoothness → overall evenness and refinement  
-- firmness → lifted vs slightly sagging appearance  
-- glow_level → light reflection, radiance  
-- eye_freshness → openness, brightness, alertness  
-- face_definition → bone structure visibility, contours  
-- symmetry → balance between both sides  
+- It is allowed for some metrics to fall within 45–60
+- HOWEVER, not all metrics can be in this range
+- You MUST ensure distribution:
+  - At least 2 metrics must be ABOVE 60
+  - At least 1 metric must be BELOW 45
+- The remaining metrics can fall in the middle range
+- Do NOT keep all metrics close together
+- Even if multiple metrics look similar, you MUST still separate them and rank them slightly differently
+
+METRIC HINTS
+
+- skin_score → overall skin impression, not an average  
+- hydration → plumpness, bounce  
+- texture → pores, irregularity  
+- smoothness → evenness  
+- firmness → lifted vs softer  
+- glow_level → radiance  
+- eye_freshness → brightness, alertness  
+- face_definition → contours  
+- symmetry → balance  
 
 SKIN AGE
 Return:
-- skin_age → realistic estimated skin age (number)
+- skin_age → realistic estimated skin age
 
 OUTPUT
 
