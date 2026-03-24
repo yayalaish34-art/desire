@@ -104,7 +104,7 @@ Nutri-Score must be one of: A, B, C, D, E.
 const FACE_SYSTEM_PROMPT = `
 You are a face analysis AI for a feminine glow up app.
 
-Your role is to gently analyze a user’s face and guide them into a 90-day glow up journey.
+Your role is to gently analyze a user’s face.
 
 Your tone should feel like a soft, supportive beauty coach.
 
@@ -130,61 +130,6 @@ Do NOT include:
 - medical skin conditions
 - anything that cannot change with habits
 
-ALLOWED FOCUS AREAS
-You MUST choose exactly 3 areas from this list:
-- jawline
-- cheeks
-- eyes
-- lips
-- eyebrows
-- symmetry
-
-GOAL
-Select the 3 most relevant areas to focus on for the next 90 days.
-
-Each area should feel:
-- personal
-- positive
-- actionable
-- part of a guided transformation
-
-FIELD RULES
-
-For each focus area:
-
-target:
-- must be one of the allowed targets
-
-title:
-- short (2–5 words)
-- feminine and aspirational
-
-why_this_area:
-- explain softly why this area is being focused on
-- never sound negative
-- make it feel like potential, not a flaw
-- 1 sentence only
-
-journey:
-- MUST describe what will happen over the next 90 days
-- MUST include:
-  - "over the next 90 days"
-  - daily habits
-  - face exercises or routines tailored to this area
-- MUST be exactly 1 sentence
-
-STYLE:
-Use phrasing like:
-- "we’ll gently work on..."
-- "we’ll focus on..."
-- "we’ll support this area..."
-
-future_vision:
-- describe how this area may look after 90 days
-- soft, feminine, natural beauty tone
-- not exaggerated
-- 1 sentence only
-
 FACE METRICS
 Analyze the face and return the following scores from 0 to 100:
 
@@ -202,11 +147,11 @@ All values must be integers.
 
 SCORING SCALE (VERY IMPORTANT)
 
-0–20 = very low / weak  
-21–40 = below average  
-41–60 = average  
-61–80 = good  
-81–100 = excellent  
+0–20 = very low / weak
+21–40 = below average
+41–60 = average
+61–80 = good
+81–100 = excellent
 
 Each score MUST reflect visible differences.
 
@@ -222,32 +167,31 @@ DISTRIBUTION RULE (VERY IMPORTANT)
 
 - It is allowed for some metrics to fall within 45–60
 - HOWEVER, not all metrics can be in this range
-
 - You MUST ensure distribution:
-  - At least 2 metrics must be BELOW 40
-  - At least 2 metric must be ABOVE 60
-
+  - At least 1 metrics must be BELOW 35
+  - At least 1 metrics must be BELOW 40
+  - At least 1 metrics must be ABOVE 70
+  - At least 1 metrics must be ABOVE 85-95
 - The remaining metrics can fall in the middle range
-
 - Do NOT keep all metrics close together
-- Even if multiple metrics look similar, you MUST still separate them and rank them slightly differently
+- Even if multiple metrics look similar, you MUST still separate them
 
 GLOW LEVEL RULE (HARD CONSTRAINT)
 
-- glow_level MUST be above 55
-- Do NOT assign glow_level below 56
+- glow_level MUST be above 45-75
+
 
 METRIC HINTS
 
-- skin_score → overall skin impression, not an average  
-- hydration → plumpness, bounce  
-- texture → pores, irregularity  
-- smoothness → evenness  
-- firmness → lifted vs softer  
-- glow_level → radiance  
-- eye_freshness → brightness, alertness  
-- face_definition → contours  
-- symmetry → balance  
+- skin_score → overall skin impression, not an average
+- hydration → plumpness, bounce
+- texture → pores, irregularity
+- smoothness → evenness
+- firmness → lifted vs softer
+- glow_level → radiance
+- eye_freshness → brightness, alertness
+- face_definition → contours
+- symmetry → balance
 
 SKIN AGE
 Return:
@@ -258,29 +202,6 @@ OUTPUT
 Return JSON only in this exact format:
 
 {
-  "focus_areas": [
-    {
-      "target": "",
-      "title": "",
-      "why_this_area": "",
-      "journey": "",
-      "future_vision": ""
-    },
-    {
-      "target": "",
-      "title": "",
-      "why_this_area": "",
-      "journey": "",
-      "future_vision": ""
-    },
-    {
-      "target": "",
-      "title": "",
-      "why_this_area": "",
-      "journey": "",
-      "future_vision": ""
-    }
-  ],
   "skin_score": 0,
   "skin_age": 0,
   "metrics": {
@@ -300,7 +221,6 @@ RULES
 - No markdown
 - No explanations
 - No extra text
-- Exactly 3 focus areas
 - All scores must be integers
 - Use simple English
 - Keep tone soft and supportive
@@ -309,66 +229,10 @@ RULES
 If no face is clearly visible, return:
 {
   "error": "no_face_detected"
-}`.trim();
+}
+`.trim();
 
 // ---------------- HELPERS ----------------
-const ALLOWED_FOCUS_TARGETS = [
-  "jawline",
-  "cheeks",
-  "eyes",
-  "lips",
-  "eyebrows",
-  "symmetry",
-];
-
-const DEFAULT_FOCUS_AREAS = [
-  {
-    target: "jawline",
-    title: "Softly sculpted jawline",
-    why_this_area:
-      "This area has beautiful potential to become more defined and balanced.",
-    journey:
-      "Over the next 90 days, we’ll gently work on shaping and defining this area with daily habits and face exercises tailored to you.",
-    future_vision:
-      "This area can look more softly sculpted, balanced, and naturally defined.",
-  },
-  {
-    target: "eyes",
-    title: "Brighter, fresh eyes",
-    why_this_area:
-      "This area can become brighter and more open with the right focus.",
-    journey:
-      "Over the next 90 days, we’ll support this area with simple daily routines and targeted exercises to help it look more awake.",
-    future_vision:
-      "This area can appear brighter, fresher, and naturally radiant.",
-  },
-  {
-    target: "cheeks",
-    title: "Lifted, fuller cheeks",
-    why_this_area:
-      "This area has lovely potential to look more lifted and shaped.",
-    journey:
-      "Over the next 90 days, we’ll gently focus on lifting and shaping this area with daily habits and face exercises tailored to you.",
-    future_vision:
-      "This area can look more lifted, soft, and naturally sculpted.",
-  },
-];
-
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function cleanShortText(value, fallback = "") {
-  if (!isNonEmptyString(value)) return fallback;
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function pickFocusTarget(value, fallback = "") {
-  if (!isNonEmptyString(value)) return fallback;
-  const normalized = value.trim().toLowerCase();
-  return ALLOWED_FOCUS_TARGETS.includes(normalized) ? normalized : fallback;
-}
-
 function clampScore(value, fallback = 0) {
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
@@ -381,52 +245,8 @@ function clampSkinAge(value, fallback = 25) {
   return Math.max(10, Math.min(80, Math.round(num)));
 }
 
-function normalizeFocusAreas(focusAreas) {
-  const input = Array.isArray(focusAreas) ? focusAreas : [];
-  const normalized = [];
-  const usedTargets = new Set();
-
-  for (const item of input) {
-    if (!item || typeof item !== "object") continue;
-
-    const target = pickFocusTarget(item.target, "");
-    if (!target || usedTargets.has(target)) continue;
-
-    const fallback =
-      DEFAULT_FOCUS_AREAS[normalized.length] || DEFAULT_FOCUS_AREAS[0];
-
-    normalized.push({
-      target,
-      title: cleanShortText(item.title, fallback.title),
-      why_this_area: cleanShortText(
-        item.why_this_area,
-        fallback.why_this_area
-      ),
-      journey: cleanShortText(item.journey, fallback.journey),
-      future_vision: cleanShortText(
-        item.future_vision,
-        fallback.future_vision
-      ),
-    });
-
-    usedTargets.add(target);
-    if (normalized.length === 3) break;
-  }
-
-  for (const fallback of DEFAULT_FOCUS_AREAS) {
-    if (normalized.length === 3) break;
-    if (usedTargets.has(fallback.target)) continue;
-
-    normalized.push({ ...fallback });
-    usedTargets.add(fallback.target);
-  }
-
-  return normalized;
-}
-
 function normalizeFaceAnalysis(parsed) {
   return {
-    focus_areas: normalizeFocusAreas(parsed?.focus_areas),
     skin_score: clampScore(parsed?.skin_score, 75),
     skin_age: clampSkinAge(parsed?.skin_age, 25),
     metrics: {
@@ -456,7 +276,7 @@ async function runFaceAnalysis(imageBase64) {
         content: [
           {
             type: "text",
-            text: "Analyze this face for a feminine 90-day glow up plan.",
+            text: "Analyze this face for a feminine glow up app.",
           },
           {
             type: "image_url",
@@ -480,6 +300,54 @@ async function runFaceAnalysis(imageBase64) {
     });
   }
 }
+
+// ---------------- ROUTE ----------------
+app.post("/analyze-face", async (req, res) => {
+  try {
+    const { imageBase64 } = req.body || {};
+
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+      return res.status(400).json({
+        error: "Missing imageBase64",
+      });
+    }
+
+    const completion = await runFaceAnalysis(imageBase64);
+    const raw = completion?.choices?.[0]?.message?.content;
+
+    if (!raw || typeof raw !== "string") {
+      return res.status(500).json({
+        error: "Empty model response",
+      });
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (parseError) {
+      console.error("Failed to parse face analysis JSON:", raw);
+      return res.status(500).json({
+        error: "Invalid JSON returned from model",
+      });
+    }
+
+    if (parsed?.error === "no_face_detected") {
+      return res.status(200).json({
+        error: "no_face_detected",
+      });
+    }
+
+    const normalized = normalizeFaceAnalysis(parsed);
+
+    return res.status(200).json(normalized);
+  } catch (error) {
+    console.error("analyze-face error:", error);
+
+    return res.status(500).json({
+      error: "Failed to analyze face",
+    });
+  }
+});
 
 // ---------------- ANALYZE TEXT ROUTE ----------------
 app.post("/analyze_text", async (req, res) => {
