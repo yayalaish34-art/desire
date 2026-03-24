@@ -159,23 +159,11 @@ title:
 - short (2–5 words)
 - feminine and aspirational
 
-Examples:
-- "Softly sculpted jawline"
-- "Brighter, fresh eyes"
-- "Lifted, fuller cheeks"
-- "Beautifully framed brows"
-- "Softer, fuller lips"
-- "More balanced harmony"
-
 why_this_area:
 - explain softly why this area is being focused on
 - never sound negative
 - make it feel like potential, not a flaw
 - 1 sentence only
-
-Examples:
-- "This area has beautiful potential to become more defined and balanced."
-- "This area can become brighter and more open with the right focus."
 
 journey:
 - MUST describe what will happen over the next 90 days
@@ -183,7 +171,6 @@ journey:
   - "over the next 90 days"
   - daily habits
   - face exercises or routines tailored to this area
-- MUST sound soft and guided
 - MUST be exactly 1 sentence
 
 STYLE:
@@ -192,43 +179,65 @@ Use phrasing like:
 - "we’ll focus on..."
 - "we’ll support this area..."
 
-Examples:
-- "Over the next 90 days, we’ll gently work on shaping and defining this area with daily habits and face exercises tailored to you."
-- "Over the next 90 days, we’ll support this area with simple daily routines and targeted exercises to help it look more lifted and refreshed."
-
 future_vision:
 - describe how this area may look after 90 days
 - soft, feminine, natural beauty tone
 - not exaggerated
 - 1 sentence only
 
-Examples:
-- "This area can look more softly sculpted, balanced, and naturally defined."
-- "This area can appear brighter, fresher, and naturally radiant."
-
 FACE METRICS
-Also analyze the face and return the following scores from 0 to 100:
+Analyze the face and return the following scores from 0 to 100:
 
-- skin_score -> overall skin quality
-- hydration -> how hydrated the skin looks
-- texture -> smoothness of the skin
-- firmness -> how firm / lifted the skin appears
-- smoothness -> how even and refined the skin surface looks
-- glow_level -> how radiant and glowing the skin looks
-- eye_freshness -> how awake and fresh the eyes look
-- face_definition -> how defined the facial structure looks
-- symmetry -> how balanced the face appears
+- skin_score
+- hydration
+- texture
+- firmness
+- smoothness
+- glow_level
+- eye_freshness
+- face_definition
+- symmetry
 
-All values must be integers from 0 to 100.
+All values must be integers.
+
+SCORING SCALE (VERY IMPORTANT)
+
+Use this scale for ALL metrics:
+
+0–20 = very low / weak / clearly lacking  
+21–40 = below average  
+41–60 = average  
+61–80 = good / healthy  
+81–100 = excellent / very strong  
+
+Each score MUST reflect visible differences.
+
+SCORING BEHAVIOR (CRITICAL)
+
+- Do NOT cluster scores between 45–60
+- Use the full 0–100 range when justified
+- Low scores are allowed
+- High scores are allowed
+- Scores MUST vary across metrics
+- Avoid giving similar values to all metrics
+- Prefer at least 8–15 point differences between weaker and stronger areas
+- If uncertain, choose a direction (slightly lower or higher), NOT the middle
+- Each metric MUST be based on a different visible cue
+
+METRIC HINTS (HOW TO DIFFERENTIATE)
+
+- hydration → plumpness, skin bounce, dryness vs fullness  
+- texture → visible surface detail, pores, irregularity  
+- smoothness → overall evenness and refinement  
+- firmness → lifted vs slightly sagging appearance  
+- glow_level → light reflection, radiance  
+- eye_freshness → openness, brightness, alertness  
+- face_definition → bone structure visibility, contours  
+- symmetry → balance between both sides  
 
 SKIN AGE
 Return:
-- skin_age -> estimated skin age as a realistic number
-
-SCORING GUIDELINES
-- Keep scores realistic
-- Do not give all high scores
-- Do not exaggerate
+- skin_age → realistic estimated skin age (number)
 
 OUTPUT
 
