@@ -302,7 +302,7 @@ async function runFaceAnalysis(imageBase64) {
 }
 
 // ---------------- ROUTE ----------------
-app.post("/analyze-face", async (req, res) => {
+app.post("/analyze_face", async (req, res) => {
   try {
     const { imageBase64 } = req.body || {};
 
@@ -339,7 +339,7 @@ app.post("/analyze-face", async (req, res) => {
 
     const normalized = normalizeFaceAnalysis(parsed);
 
-    return res.status(200).json(normalized);
+    return res.status(200).json({ success: true, analysis: normalized });
   } catch (error) {
     console.error("analyze-face error:", error);
 
