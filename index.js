@@ -21,11 +21,46 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// ---------------- HELPERS ----------------
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function clampScore(value, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(num)));
+}
+
+function clampSkinAge(value, fallback = 25) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(10, Math.min(80, Math.round(num)));
+}
+
+function normalizeFaceAnalysis(parsed) {
+  return {
+    skin_score: clampScore(parsed?.skin_score, 75),
+    skin_age: clampSkinAge(parsed?.skin_age, 25),
+    metrics: {
+      hydration: clampScore(parsed?.metrics?.hydration, 75),
+      texture: clampScore(parsed?.metrics?.texture, 75),
+      firmness: clampScore(parsed?.metrics?.firmness, 75),
+      smoothness: clampScore(parsed?.metrics?.smoothness, 75),
+      glow_level: clampScore(parsed?.metrics?.glow_level, 75),
+      eye_freshness: clampScore(parsed?.metrics?.eye_freshness, 75),
+      face_definition: clampScore(parsed?.metrics?.face_definition, 75),
+      symmetry: clampScore(parsed?.metrics?.symmetry, 75),
+    },
+  };
+}
 
 // ---------------- HEALTH CHECK ----------------
 app.get("/", (req, res) => {
@@ -180,7 +215,6 @@ GLOW LEVEL RULE (HARD CONSTRAINT)
 
 - glow_level MUST be above 45-75
 
-
 METRIC HINTS
 
 - skin_score → overall skin impression, not an average
@@ -232,36 +266,7 @@ If no face is clearly visible, return:
 }
 `.trim();
 
-// ---------------- HELPERS ----------------
-function clampScore(value, fallback = 0) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return fallback;
-  return Math.max(0, Math.min(100, Math.round(num)));
-}
-
-function clampSkinAge(value, fallback = 25) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return fallback;
-  return Math.max(10, Math.min(80, Math.round(num)));
-}
-
-function normalizeFaceAnalysis(parsed) {
-  return {
-    skin_score: clampScore(parsed?.skin_score, 75),
-    skin_age: clampSkinAge(parsed?.skin_age, 25),
-    metrics: {
-      hydration: clampScore(parsed?.metrics?.hydration, 75),
-      texture: clampScore(parsed?.metrics?.texture, 75),
-      firmness: clampScore(parsed?.metrics?.firmness, 75),
-      smoothness: clampScore(parsed?.metrics?.smoothness, 75),
-      glow_level: clampScore(parsed?.metrics?.glow_level, 75),
-      eye_freshness: clampScore(parsed?.metrics?.eye_freshness, 75),
-      face_definition: clampScore(parsed?.metrics?.face_definition, 75),
-      symmetry: clampScore(parsed?.metrics?.symmetry, 75),
-    },
-  };
-}
-
+// ---------------- FACE ANALYSIS MODEL HELPER ----------------
 async function runFaceAnalysis(imageBase64) {
   const requestBody = {
     model: "gpt-4.1-mini",
@@ -293,7 +298,6 @@ async function runFaceAnalysis(imageBase64) {
     return await client.chat.completions.create(requestBody);
   } catch (error) {
     console.log("gpt-4.1-mini failed, switching to gpt-4.1-nano...");
-
     return await client.chat.completions.create({
       ...requestBody,
       model: "gpt-4.1-nano",
@@ -301,66 +305,80 @@ async function runFaceAnalysis(imageBase64) {
   }
 }
 
-// ---------------- ROUTE ----------------
+// ---------------- ANALYZE FACE ROUTE ----------------
 app.post("/analyze_face", async (req, res) => {
   try {
-    const { imageBase64 } = req.body || {};
+    const imageBase64 = req.body?.imageBase64;
 
-    if (!imageBase64 || typeof imageBase64 !== "string") {
+    if (!isNonEmptyString(imageBase64)) {
       return res.status(400).json({
-        error: "Missing imageBase64",
+        success: false,
+        error: "missing_image_base64",
       });
     }
 
-    const completion = await runFaceAnalysis(imageBase64);
-    const raw = completion?.choices?.[0]?.message?.content;
+    const response = await runFaceAnalysis(imageBase64.trim());
+    const content = response?.choices?.[0]?.message?.content;
 
-    if (!raw || typeof raw !== "string") {
-      return res.status(500).json({
-        error: "Empty model response",
+    if (!isNonEmptyString(content)) {
+      return res.status(502).json({
+        success: false,
+        error: "empty_model_response",
       });
     }
 
     let parsed;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(content);
     } catch (parseError) {
-      console.error("Failed to parse face analysis JSON:", raw);
-      return res.status(500).json({
-        error: "Invalid JSON returned from model",
+      console.error("analyze_face invalid JSON:", content);
+      return res.status(502).json({
+        success: false,
+        error: "invalid_json_from_model",
       });
     }
 
     if (parsed?.error === "no_face_detected") {
       return res.status(200).json({
+        success: false,
         error: "no_face_detected",
       });
     }
 
-    const normalized = normalizeFaceAnalysis(parsed);
+    const analysis = normalizeFaceAnalysis(parsed);
 
-    return res.status(200).json({ success: true, analysis: normalized });
+    return res.status(200).json({
+      success: true,
+      analysis,
+    });
   } catch (error) {
-    console.error("analyze-face error:", error);
+    console.error("analyze_face error:", error);
 
     return res.status(500).json({
-      error: "Failed to analyze face",
+      success: false,
+      error: error instanceof Error ? error.message : "server_error",
     });
   }
 });
 
+// ---------------- ANALYZE COLOR ROUTE ----------------
 app.post("/analyze_color", async (req, res) => {
   try {
-    const body = req.body;
+    const body = req.body || {};
 
-    const imageUrl = body?.imageUrl;
-    const base64Image = body?.base64Image;
+    const imageUrl = body.imageUrl;
+    const base64Image = body.base64Image;
 
     if (!imageUrl && !base64Image) {
       return res.status(400).json({
         error: "Missing imageUrl or base64Image",
       });
     }
+
+    console.log("analyze_color called");
+    console.log("has imageUrl:", !!imageUrl);
+    console.log("has base64Image:", !!base64Image);
+    console.log("base64 length:", base64Image?.length || 0);
 
     const imagePart = imageUrl
       ? {
@@ -387,6 +405,7 @@ app.post("/analyze_color", async (req, res) => {
             properties: {
               palette: {
                 type: "object",
+                additionalProperties: false,
                 properties: {
                   title: { type: "string" },
                   description: { type: "string" },
@@ -395,6 +414,7 @@ app.post("/analyze_color", async (req, res) => {
               },
               metal: {
                 type: "object",
+                additionalProperties: false,
                 properties: {
                   title: { type: "string" },
                   description: { type: "string" },
@@ -407,6 +427,7 @@ app.post("/analyze_color", async (req, res) => {
                 maxItems: 6,
                 items: {
                   type: "object",
+                  additionalProperties: false,
                   properties: {
                     name: { type: "string" },
                     hex: { type: "string" },
@@ -420,6 +441,7 @@ app.post("/analyze_color", async (req, res) => {
                 maxItems: 4,
                 items: {
                   type: "object",
+                  additionalProperties: false,
                   properties: {
                     name: { type: "string" },
                     hex: { type: "string" },
@@ -446,7 +468,7 @@ Analyze the person in the image and return:
 "Your blue eyes and ash blonde hair fit well with the light summer palette which features cool, soft, and gentle colors."
 
 2. metal:
-- title: "Silver" / "Gold"
+- title: "Silver" or "Gold"
 - description like:
 "Silver complements cool tones found in ash blonde hair and enhances the brightness of blue eyes."
 
@@ -457,49 +479,64 @@ Rules:
 - elegant, aesthetic tone
 - valid hex codes
 - exact structure only
+- return valid JSON only
           `.trim(),
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Analyze this face and return JSON" },
+            { type: "text", text: "Analyze this face and return JSON." },
             imagePart,
           ],
         },
       ],
     });
 
-    const content = completion.choices[0]?.message?.content;
+    const content = completion?.choices?.[0]?.message?.content;
 
-    if (!content) {
-      return res.status(500).json({
+    if (!isNonEmptyString(content)) {
+      return res.status(502).json({
         error: "No response from model",
       });
     }
 
-    const parsed = JSON.parse(content);
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      console.error("analyze_color invalid JSON:", content);
+      return res.status(502).json({
+        error: "Invalid JSON returned from model",
+      });
+    }
 
-    return res.json(parsed);
+    return res.status(200).json(parsed);
   } catch (error) {
-    console.error("analyze_color error:", error);
+    console.error("analyze_color error full:", error);
     return res.status(500).json({
-      error: "Failed to analyze image",
+      error: error instanceof Error ? error.message : "Failed to analyze image",
     });
   }
 });
 
+// ---------------- ANALYZE BODY SHAPE ROUTE ----------------
 app.post("/analyze_body_shape", async (req, res) => {
   try {
-    const body = req.body;
+    const body = req.body || {};
 
-    const imageUrl = body?.imageUrl;
-    const base64Image = body?.base64Image;
+    const imageUrl = body.imageUrl;
+    const base64Image = body.base64Image;
 
     if (!imageUrl && !base64Image) {
       return res.status(400).json({
         error: "Missing imageUrl or base64Image",
       });
     }
+
+    console.log("analyze_body_shape called");
+    console.log("has imageUrl:", !!imageUrl);
+    console.log("has base64Image:", !!base64Image);
+    console.log("base64 length:", base64Image?.length || 0);
 
     const imagePart = imageUrl
       ? {
@@ -610,30 +647,40 @@ Rules:
       ],
     });
 
-    const content = completion.choices[0]?.message?.content;
+    const content = completion?.choices?.[0]?.message?.content;
 
-    if (!content) {
-      return res.status(500).json({
+    if (!isNonEmptyString(content)) {
+      return res.status(502).json({
         error: "No response from model",
       });
     }
 
-    const parsed = JSON.parse(content);
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      console.error("analyze_body_shape invalid JSON:", content);
+      return res.status(502).json({
+        error: "Invalid JSON returned from model",
+      });
+    }
 
-    return res.json(parsed);
+    return res.status(200).json(parsed);
   } catch (error) {
-    console.error("analyze_body_shape error:", error);
+    console.error("analyze_body_shape error full:", error);
     return res.status(500).json({
-      error: "Failed to analyze body shape",
+      error:
+        error instanceof Error ? error.message : "Failed to analyze body shape",
     });
   }
 });
+
 // ---------------- ANALYZE TEXT ROUTE ----------------
 app.post("/analyze_text", async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text } = req.body || {};
 
-    if (!text || typeof text !== "string" || !text.trim()) {
+    if (!isNonEmptyString(text)) {
       return res.status(400).json({ error: "text is required" });
     }
 
@@ -649,17 +696,19 @@ app.post("/analyze_text", async (req, res) => {
       response_format: { type: "json_object" },
     });
 
-    const jsonText = response.choices[0].message.content?.trim();
+    const jsonText = response?.choices?.[0]?.message?.content?.trim();
 
-    if (!jsonText) {
+    if (!isNonEmptyString(jsonText)) {
       return res.status(502).json({ error: "Model returned empty output" });
     }
 
     const parsed = JSON.parse(jsonText);
-    return res.json(parsed);
+    return res.status(200).json(parsed);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("analyze_text error:", err);
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Server error",
+    });
   }
 });
 
@@ -682,7 +731,7 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
 
     const transcriptText = transcription?.text?.trim();
 
-    if (!transcriptText) {
+    if (!isNonEmptyString(transcriptText)) {
       return res.status(502).json({ error: "Empty transcription result" });
     }
 
@@ -698,28 +747,32 @@ app.post("/analyze_audio", upload.single("file"), async (req, res) => {
       response_format: { type: "json_object" },
     });
 
-    const jsonText = response.choices[0].message.content?.trim();
+    const jsonText = response?.choices?.[0]?.message?.content?.trim();
 
-    if (!jsonText) {
+    if (!isNonEmptyString(jsonText)) {
       return res.status(502).json({ error: "Model returned empty output" });
     }
 
     const parsed = JSON.parse(jsonText);
-    return res.json(parsed);
+    return res.status(200).json(parsed);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("analyze_audio error:", err);
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Server error",
+    });
   } finally {
-    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   }
 });
 
 // ---------------- ANALYZE FOOD IMAGE ROUTE ----------------
 app.post("/analyze", async (req, res) => {
   try {
-    const { imageBase64 } = req.body;
+    const { imageBase64 } = req.body || {};
 
-    if (!imageBase64) {
+    if (!isNonEmptyString(imageBase64)) {
       return res.status(400).json({ error: "imageBase64 is required" });
     }
 
@@ -827,7 +880,6 @@ If image is not food, return:
       response = await client.chat.completions.create(requestBody);
     } catch (err) {
       console.log("Mini failed, switching to nano...");
-
       response = await client.chat.completions.create({
         ...requestBody,
         model: "gpt-4.1-nano",
@@ -836,77 +888,25 @@ If image is not food, return:
 
     const content = response?.choices?.[0]?.message?.content;
 
-    if (!content) {
+    if (!isNonEmptyString(content)) {
       return res.status(502).json({ error: "Empty response from model" });
     }
 
     let parsed;
     try {
       parsed = JSON.parse(content);
-    } catch {
+    } catch (parseError) {
+      console.error("analyze invalid JSON:", content);
       return res
         .status(500)
         .json({ error: "Invalid JSON returned from model" });
     }
 
-    return res.json(parsed);
+    return res.status(200).json(parsed);
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
-
-// ---------------- ANALYZE FACE ROUTE ----------------
-app.post("/analyze_face", async (req, res) => {
-  try {
-    const imageBase64 = req.body?.imageBase64;
-
-    if (!isNonEmptyString(imageBase64)) {
-      return res.status(400).json({
-        success: false,
-        error: "missing_image_base64",
-      });
-    }
-
-    const response = await runFaceAnalysis(imageBase64.trim());
-    const content = response?.choices?.[0]?.message?.content;
-
-    if (!isNonEmptyString(content)) {
-      return res.status(502).json({
-        success: false,
-        error: "empty_model_response",
-      });
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      return res.status(502).json({
-        success: false,
-        error: "invalid_json_from_model",
-      });
-    }
-
-    if (parsed?.error === "no_face_detected") {
-      return res.status(200).json({
-        success: false,
-        error: "no_face_detected",
-      });
-    }
-
-    const analysis = normalizeFaceAnalysis(parsed);
-
-    return res.status(200).json({
-      success: true,
-      analysis,
-    });
-  } catch (error) {
-    console.error("analyze-face error:", error);
-
+    console.error("analyze error:", error);
     return res.status(500).json({
-      success: false,
-      error: "server_error",
+      error: error instanceof Error ? error.message : "Server error",
     });
   }
 });
@@ -914,7 +914,8 @@ app.post("/analyze_face", async (req, res) => {
 // ---------------- BARCODE ROUTE ----------------
 app.post("/barcode", async (req, res) => {
   try {
-    const { barcode } = req.body;
+    const { barcode } = req.body || {};
+
     if (!barcode) {
       return res.status(400).json({ error: "barcode is required" });
     }
@@ -1030,7 +1031,8 @@ app.post("/barcode", async (req, res) => {
     })();
 
     const packFromQuantityString = parseQuantityString(p.quantity);
-    const packAmountBase = packFromProductQuantity ?? packFromQuantityString ?? null;
+    const packAmountBase =
+      packFromProductQuantity ?? packFromQuantityString ?? null;
     const packBaseUnit = isDrink ? "ml" : "g";
 
     const getPer100 = () => {
@@ -1086,7 +1088,8 @@ app.post("/barcode", async (req, res) => {
         per100.calories == null ? null : round(per100.calories * factor, decimals),
       protein:
         per100.protein == null ? null : round(per100.protein * factor, decimals),
-      carbs: per100.carbs == null ? null : round(per100.carbs * factor, decimals),
+      carbs:
+        per100.carbs == null ? null : round(per100.carbs * factor, decimals),
       fat: per100.fat == null ? null : round(per100.fat * factor, decimals),
       salt: per100.salt == null ? null : round(per100.salt * factor, decimals),
     });
@@ -1127,8 +1130,10 @@ app.post("/barcode", async (req, res) => {
       perPackage,
     });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("barcode error:", err);
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Server error",
+    });
   }
 });
 
