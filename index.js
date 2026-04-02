@@ -349,6 +349,144 @@ app.post("/analyze_face", async (req, res) => {
   }
 });
 
+app.post("/analyze_color", async (req, res) => {
+  try {
+    const body = req.body;
+
+    const imageUrl = body?.imageUrl;
+    const base64Image = body?.base64Image;
+
+    if (!imageUrl && !base64Image) {
+      return res.status(400).json({
+        error: "Missing imageUrl or base64Image",
+      });
+    }
+
+    const imagePart = imageUrl
+      ? {
+          type: "image_url",
+          image_url: { url: imageUrl },
+        }
+      : {
+          type: "image_url",
+          image_url: {
+            url: `data:image/jpeg;base64,${base64Image}`,
+          },
+        };
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "personal_color_analysis",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              palette: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                },
+                required: ["title", "description"],
+              },
+              metal: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                },
+                required: ["title", "description"],
+              },
+              bestColors: {
+                type: "array",
+                minItems: 6,
+                maxItems: 6,
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    hex: { type: "string" },
+                  },
+                  required: ["name", "hex"],
+                },
+              },
+              avoidColors: {
+                type: "array",
+                minItems: 4,
+                maxItems: 4,
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    hex: { type: "string" },
+                  },
+                  required: ["name", "hex"],
+                },
+              },
+            },
+            required: ["palette", "metal", "bestColors", "avoidColors"],
+          },
+        },
+      },
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a personal color analysis expert.
+
+Analyze the person in the image and return:
+
+1. palette:
+- title: short palette name like "Light Summer"
+- description like:
+"Your blue eyes and ash blonde hair fit well with the light summer palette which features cool, soft, and gentle colors."
+
+2. metal:
+- title: "Silver" / "Gold"
+- description like:
+"Silver complements cool tones found in ash blonde hair and enhances the brightness of blue eyes."
+
+3. bestColors (6)
+4. avoidColors (4)
+
+Rules:
+- elegant, aesthetic tone
+- valid hex codes
+- exact structure only
+          `.trim(),
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyze this face and return JSON" },
+            imagePart,
+          ],
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+
+    if (!content) {
+      return res.status(500).json({
+        error: "No response from model",
+      });
+    }
+
+    const parsed = JSON.parse(content);
+
+    return res.json(parsed);
+  } catch (error) {
+    console.error("analyze_color error:", error);
+    return res.status(500).json({
+      error: "Failed to analyze image",
+    });
+  }
+});
 // ---------------- ANALYZE TEXT ROUTE ----------------
 app.post("/analyze_text", async (req, res) => {
   try {
