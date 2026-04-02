@@ -487,6 +487,147 @@ Rules:
     });
   }
 });
+
+app.post("/analyze_body_shape", async (req, res) => {
+  try {
+    const body = req.body;
+
+    const imageUrl = body?.imageUrl;
+    const base64Image = body?.base64Image;
+
+    if (!imageUrl && !base64Image) {
+      return res.status(400).json({
+        error: "Missing imageUrl or base64Image",
+      });
+    }
+
+    const imagePart = imageUrl
+      ? {
+          type: "image_url",
+          image_url: { url: imageUrl },
+        }
+      : {
+          type: "image_url",
+          image_url: {
+            url: `data:image/jpeg;base64,${base64Image}`,
+          },
+        };
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "body_shape_analysis",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              bodyShape: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                },
+                required: ["title", "description"],
+              },
+              stylingTips: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  tops: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 3,
+                    items: { type: "string" },
+                  },
+                  bottoms: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 3,
+                    items: { type: "string" },
+                  },
+                  dresses: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 3,
+                    items: { type: "string" },
+                  },
+                  accessories: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 3,
+                    items: { type: "string" },
+                  },
+                },
+                required: ["tops", "bottoms", "dresses", "accessories"],
+              },
+            },
+            required: ["bodyShape", "stylingTips"],
+          },
+        },
+      },
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a feminine body shape styling assistant.
+
+Analyze the person in the image and return:
+
+1. bodyShape
+- title: a short body shape name like "Hourglass", "Pear", "Rectangle", "Inverted Triangle", or "Apple"
+- description: around the same length and style as:
+"Balanced proportions with a well-defined waist. Bust and hips are approximately the same width, while the waist is significantly smaller."
+
+2. stylingTips
+Return exactly 3 tips for each:
+- tops
+- bottoms
+- dresses
+- accessories
+
+Rules:
+- Keep tone elegant, supportive, feminine, and app-friendly
+- Tips should be short, practical, and visually clear
+- Do not mention weight loss or body criticism
+- Do not add extra fields
+- Return valid JSON only
+          `.trim(),
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analyze this body shape and return JSON.",
+            },
+            imagePart,
+          ],
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+
+    if (!content) {
+      return res.status(500).json({
+        error: "No response from model",
+      });
+    }
+
+    const parsed = JSON.parse(content);
+
+    return res.json(parsed);
+  } catch (error) {
+    console.error("analyze_body_shape error:", error);
+    return res.status(500).json({
+      error: "Failed to analyze body shape",
+    });
+  }
+});
 // ---------------- ANALYZE TEXT ROUTE ----------------
 app.post("/analyze_text", async (req, res) => {
   try {
