@@ -408,11 +408,11 @@ Return this exact structure:
 {
   "palette": {
     "title": "Light Summer",
-    "description": "A short elegant explanation of why this palette suits the person."
+    "description": "A short, elegant explanation written directly to the user, explaining why this palette suits you based on your visible features (undertone, contrast, hair, eyes, skin softness). Explain how these colors enhance your natural appearance."
   },
   "metal": {
     "title": "Silver",
-    "description": "A short elegant explanation of why this metal suits the person."
+    "description": "A short explanation written directly to you, explaining why this metal complements your undertone and overall coloring."
   },
   "bestColors": [
     { "name": "Soft Rose", "hex": "#D8A7B1" },
@@ -439,8 +439,24 @@ Rules:
 - Each color must have:
   - name: string
   - hex: valid 7-character hex color starting with #
-- Tone should be elegant, supportive, aesthetic, and app-friendly
-- Analyze the visible undertone, contrast, hair, eyes, and overall softness or brightness
+
+Tone & Style:
+- Speak directly to the user (use "you", "your")
+- Tone should feel supportive, elevated, aesthetic, and slightly luxurious
+- Encourage the user subtly (make them feel good about their features)
+
+Analysis Requirements:
+- Base everything on visible features only (skin undertone, contrast, hair, eyes, softness/brightness)
+- Do NOT make generic claims — every statement must connect to what is visible in the face
+- Explain WHY the palette works (e.g. softness vs brightness, warm vs cool harmony)
+
+Color Explanation:
+- Briefly explain how the recommended colors interact with your face (e.g. brighten your skin, reduce shadows, enhance eye color, create harmony)
+- Avoid vague statements — keep it grounded and visual
+
+Extra Value (important):
+- Include one subtle practical insight inside the palette description (for example: what happens when you wear the wrong colors vs the right ones, or how these colors will make your features stand out naturally)
+
 - Pick only one metal: "Silver" or "Gold"
           `.trim(),
         },
