@@ -203,10 +203,8 @@ DISTRIBUTION RULE (VERY IMPORTANT)
 - It is allowed for some metrics to fall within 45–60
 - HOWEVER, not all metrics can be in this range
 - You MUST ensure distribution:
-  - At least 1 metrics must be BELOW 35
-  - At least 1 metrics must be BELOW 40
-  - At least 1 metrics must be ABOVE 70
-  - At least 1 metrics must be ABOVE 85-95
+  - At least 2 metrics must be BELOW 40
+  - At least 2 metrics must be ABOVE 75
 - The remaining metrics can fall in the middle range
 - Do NOT keep all metrics close together
 - Even if multiple metrics look similar, you MUST still separate them
@@ -362,6 +360,7 @@ app.post("/analyze_face", async (req, res) => {
 });
 
 // ---------------- ANALYZE COLOR ROUTE ----------------
+// ---------------- ANALYZE COLOR ROUTE ----------------
 app.post("/analyze_color", async (req, res) => {
   try {
     const body = req.body || {};
@@ -371,7 +370,8 @@ app.post("/analyze_color", async (req, res) => {
 
     if (!imageUrl && !base64Image) {
       return res.status(400).json({
-        error: "Missing imageUrl or base64Image",
+        success: false,
+        error: "missing_image",
       });
     }
 
@@ -388,115 +388,81 @@ app.post("/analyze_color", async (req, res) => {
       : {
           type: "image_url",
           image_url: {
-            url: `data:image/jpeg;base64,${base64Image}`,
+            url: `data:image/jpeg;base64,${base64Image.trim()}`,
           },
         };
 
-    const completion = await client.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "personal_color_analysis",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              palette: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  title: { type: "string" },
-                  description: { type: "string" },
-                },
-                required: ["title", "description"],
-              },
-              metal: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  title: { type: "string" },
-                  description: { type: "string" },
-                },
-                required: ["title", "description"],
-              },
-              bestColors: {
-                type: "array",
-                minItems: 6,
-                maxItems: 6,
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    name: { type: "string" },
-                    hex: { type: "string" },
-                  },
-                  required: ["name", "hex"],
-                },
-              },
-              avoidColors: {
-                type: "array",
-                minItems: 4,
-                maxItems: 4,
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    name: { type: "string" },
-                    hex: { type: "string" },
-                  },
-                  required: ["name", "hex"],
-                },
-              },
-            },
-            required: ["palette", "metal", "bestColors", "avoidColors"],
-          },
-        },
-      },
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content: `
 You are a personal color analysis expert.
 
-Analyze the person in the image and return:
+Analyze the person in the image and return JSON only.
 
-1. palette:
-- title: short palette name like "Light Summer"
-- description like:
-"Your blue eyes and ash blonde hair fit well with the light summer palette which features cool, soft, and gentle colors."
+Return this exact structure:
 
-2. metal:
-- title: "Silver" or "Gold"
-- description like:
-"Silver complements cool tones found in ash blonde hair and enhances the brightness of blue eyes."
-
-3. bestColors (6)
-4. avoidColors (4)
+{
+  "palette": {
+    "title": "Light Summer",
+    "description": "A short elegant explanation of why this palette suits the person."
+  },
+  "metal": {
+    "title": "Silver",
+    "description": "A short elegant explanation of why this metal suits the person."
+  },
+  "bestColors": [
+    { "name": "Soft Rose", "hex": "#D8A7B1" },
+    { "name": "Dusty Blue", "hex": "#8CA9C7" },
+    { "name": "Cool Mauve", "hex": "#B79AC8" },
+    { "name": "Soft Lavender", "hex": "#C7B4E2" },
+    { "name": "Muted Teal", "hex": "#6FA7A1" },
+    { "name": "Light Berry", "hex": "#B76E8A" }
+  ],
+  "avoidColors": [
+    { "name": "Bright Orange", "hex": "#FF7A00" },
+    { "name": "Neon Yellow", "hex": "#F6FF00" },
+    { "name": "Harsh Black", "hex": "#111111" },
+    { "name": "Warm Mustard", "hex": "#C89B00" }
+  ]
+}
 
 Rules:
-- elegant, aesthetic tone
-- valid hex codes
-- exact structure only
-- return valid JSON only
+- Return valid JSON only
+- No markdown
+- No explanations outside JSON
+- bestColors must contain exactly 6 items
+- avoidColors must contain exactly 4 items
+- Each color must have:
+  - name: string
+  - hex: valid 7-character hex color starting with #
+- Tone should be elegant, supportive, aesthetic, and app-friendly
+- Analyze the visible undertone, contrast, hair, eyes, and overall softness or brightness
+- Pick only one metal: "Silver" or "Gold"
           `.trim(),
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Analyze this face and return JSON." },
+            {
+              type: "text",
+              text: "Analyze this face and return personal color analysis JSON.",
+            },
             imagePart,
           ],
         },
       ],
     });
 
-    const content = completion?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
 
     if (!isNonEmptyString(content)) {
       return res.status(502).json({
-        error: "No response from model",
+        success: false,
+        error: "empty_model_response",
       });
     }
 
@@ -506,15 +472,97 @@ Rules:
     } catch (parseError) {
       console.error("analyze_color invalid JSON:", content);
       return res.status(502).json({
-        error: "Invalid JSON returned from model",
+        success: false,
+        error: "invalid_json_from_model",
+        raw: content,
       });
     }
 
-    return res.status(200).json(parsed);
+    // basic normalization / validation
+    const palette = {
+      title: isNonEmptyString(parsed?.palette?.title)
+        ? parsed.palette.title.trim()
+        : "Personal Palette",
+      description: isNonEmptyString(parsed?.palette?.description)
+        ? parsed.palette.description.trim()
+        : "A soft, flattering palette selected for your features.",
+    };
+
+    const metalTitle =
+      parsed?.metal?.title === "Gold" ? "Gold" : "Silver";
+
+    const metal = {
+      title: metalTitle,
+      description: isNonEmptyString(parsed?.metal?.description)
+        ? parsed.metal.description.trim()
+        : `${metalTitle} complements your overall coloring best.`,
+    };
+
+    const isValidHex = (value) =>
+      typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value);
+
+    const normalizeColorArray = (arr, fallback) => {
+      if (!Array.isArray(arr)) return fallback;
+
+      return arr
+        .filter(
+          (item) =>
+            isNonEmptyString(item?.name) &&
+            isValidHex(item?.hex)
+        )
+        .map((item) => ({
+          name: item.name.trim(),
+          hex: item.hex.toUpperCase(),
+        }));
+    };
+
+    const fallbackBestColors = [
+      { name: "Soft Rose", hex: "#D8A7B1" },
+      { name: "Dusty Blue", hex: "#8CA9C7" },
+      { name: "Cool Mauve", hex: "#B79AC8" },
+      { name: "Soft Lavender", hex: "#C7B4E2" },
+      { name: "Muted Teal", hex: "#6FA7A1" },
+      { name: "Light Berry", hex: "#B76E8A" },
+    ];
+
+    const fallbackAvoidColors = [
+      { name: "Bright Orange", hex: "#FF7A00" },
+      { name: "Neon Yellow", hex: "#F6FF00" },
+      { name: "Harsh Black", hex: "#111111" },
+      { name: "Warm Mustard", hex: "#C89B00" },
+    ];
+
+    let bestColors = normalizeColorArray(parsed?.bestColors, fallbackBestColors);
+    let avoidColors = normalizeColorArray(
+      parsed?.avoidColors,
+      fallbackAvoidColors
+    );
+
+    if (bestColors.length < 6) {
+      bestColors = fallbackBestColors;
+    } else {
+      bestColors = bestColors.slice(0, 6);
+    }
+
+    if (avoidColors.length < 4) {
+      avoidColors = fallbackAvoidColors;
+    } else {
+      avoidColors = avoidColors.slice(0, 4);
+    }
+
+    return res.status(200).json({
+      success: true,
+      palette,
+      metal,
+      bestColors,
+      avoidColors,
+    });
   } catch (error) {
     console.error("analyze_color error full:", error);
+
     return res.status(500).json({
-      error: error instanceof Error ? error.message : "Failed to analyze image",
+      success: false,
+      error: error instanceof Error ? error.message : "failed_to_analyze_color",
     });
   }
 });
