@@ -406,27 +406,27 @@ Analyze the person in the image and return JSON only.
 Return this exact structure:
 
 {
-"palette": {
-  "title": "Light Summer",
-  "description": "A concise explanation written directly to you, based on your visible features (undertone, contrast, hair, eyes, skin softness) in 3 short sentences."
-},
-"metal": {
-  "title": "Silver",
-  "description": "A concise explanation written directly to you, explaining why this metal complements your undertone and overall coloring in exactly 2 short sentences."
-},
+  "palette": {
+    "title": "<season name>",
+    "description": "Write a concise explanation directly to the user, based on their visible features (undertone, contrast, hair, eyes, skin softness) in 3 short sentences."
+  },
+  "metal": {
+    "title": "<metal type>",
+    "description": "Write a concise explanation directly to the user, explaining why this metal complements their undertone and overall coloring in exactly 2 short sentences."
+  },
   "bestColors": [
-    { "name": "Soft Rose", "hex": "#D8A7B1" },
-    { "name": "Dusty Blue", "hex": "#8CA9C7" },
-    { "name": "Cool Mauve", "hex": "#B79AC8" },
-    { "name": "Soft Lavender", "hex": "#C7B4E2" },
-    { "name": "Muted Teal", "hex": "#6FA7A1" },
-    { "name": "Light Berry", "hex": "#B76E8A" }
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" }
   ],
   "avoidColors": [
-    { "name": "Bright Orange", "hex": "#FF7A00" },
-    { "name": "Neon Yellow", "hex": "#F6FF00" },
-    { "name": "Harsh Black", "hex": "#111111" },
-    { "name": "Warm Mustard", "hex": "#C89B00" }
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" },
+    { "name": "<color name>", "hex": "<hex code>" }
   ]
 }
 
