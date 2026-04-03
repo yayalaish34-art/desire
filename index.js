@@ -408,7 +408,7 @@ Return this exact structure:
 {
   "palette": {
     "title": "<season name>",
-    "description": "Write a concise explanation directly to the user, based on their visible features (undertone, contrast, hair, eyes, skin softness) in 3 short sentences."
+    "description": "Write a concise explanation directly to the user, based on their visible features (undertone, contrast, hair, eyes, skin softness) in 2 short sentences."
   },
   "metal": {
     "title": "<metal type>",
