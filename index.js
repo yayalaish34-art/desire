@@ -83,6 +83,7 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
+// ---------------- ANALYZE CELEB INSPIRATION ----------------
 app.post("/analyze_celeb_inspiration", async (req, res) => {
   try {
     const { imageUrl, base64Image } = req.body ?? {};
@@ -125,7 +126,15 @@ Important rules:
 - Do NOT mention percentages or confidence scores.
 - Use feminine, polished language.
 
-Return JSON exactly in this format:
+CRITICAL: If no face is clearly visible in the image (e.g. the image shows a body, an object, a landscape, a blurry photo, or the face is obscured), return exactly:
+
+{
+  "success": false,
+  "error": "no_face_detected",
+  "message": "I couldn't clearly detect a face in this image. Please upload a clear front-facing photo so I can find your celebrity references."
+}
+
+If a face IS clearly visible, return JSON exactly in this format:
 {
   "success": true,
   "celebrities": [
@@ -157,6 +166,16 @@ Rules:
 
     const raw = completion.choices?.[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(raw);
+
+    // Layer 2: response contract check
+    if (parsed?.success === false || parsed?.error === "no_face_detected") {
+      return res.status(200).json({
+        success: false,
+        error: "no_face_detected",
+        message:
+          "I couldn't clearly detect a face in this image. Please upload a clear front-facing photo so I can find your celebrity references.",
+      });
+    }
 
     const celebrities = Array.isArray(parsed.celebrities)
       ? parsed.celebrities.slice(0, 4)
@@ -235,7 +254,7 @@ Nutri-Score must be one of: A, B, C, D, E.
 const FACE_SYSTEM_PROMPT = `
 You are a face analysis AI for a feminine glow up app.
 
-Your role is to gently analyze a user’s face.
+Your role is to gently analyze a user's face.
 
 Your tone should feel like a soft, supportive beauty coach.
 
@@ -325,9 +344,15 @@ SKIN AGE
 Return:
 - skin_age → realistic estimated skin age
 
+CRITICAL: If no face is clearly visible in the image (e.g. the image shows a body, an object, a landscape, a blurry photo, or the face is obscured or too small), return exactly:
+
+{
+  "error": "no_face_detected"
+}
+
 OUTPUT
 
-Return JSON only in this exact format:
+If a face IS clearly visible, return JSON only in this exact format:
 
 {
   "skin_score": 0,
@@ -353,11 +378,6 @@ RULES
 - Use simple English
 - Keep tone soft and supportive
 - Do not mention acne or medical issues
-
-If no face is clearly visible, return:
-{
-  "error": "no_face_detected"
-}
 `.trim();
 
 // ---------------- FACE ANALYSIS MODEL HELPER ----------------
@@ -432,10 +452,13 @@ app.post("/analyze_face", async (req, res) => {
       });
     }
 
+    // Layer 2: response contract check
     if (parsed?.error === "no_face_detected") {
       return res.status(200).json({
         success: false,
         error: "no_face_detected",
+        message:
+          "I couldn't clearly detect a face in this image. Please upload a clear front-facing photo with your face fully visible.",
       });
     }
 
@@ -455,7 +478,6 @@ app.post("/analyze_face", async (req, res) => {
   }
 });
 
-// ---------------- ANALYZE COLOR ROUTE ----------------
 // ---------------- ANALYZE COLOR ROUTE ----------------
 app.post("/analyze_color", async (req, res) => {
   try {
@@ -497,7 +519,15 @@ app.post("/analyze_color", async (req, res) => {
           content: `
 You are a personal color analysis expert.
 
-Analyze the person in the image and return JSON only.
+CRITICAL: If no face is clearly visible in the image (e.g. the image shows a body, an object, a landscape, a blurry photo, or the face is obscured or too small to analyze coloring), return exactly:
+
+{
+  "success": false,
+  "error": "no_face_detected",
+  "message": "I couldn't clearly analyze your coloring from this image. Please upload a clear photo with your face fully visible and natural lighting if possible."
+}
+
+If a face IS clearly visible, analyze the person and return JSON only.
 
 Return this exact structure:
 
@@ -587,6 +617,16 @@ Extra Value (important):
         success: false,
         error: "invalid_json_from_model",
         raw: content,
+      });
+    }
+
+    // Layer 2: response contract check
+    if (parsed?.success === false || parsed?.error === "no_face_detected") {
+      return res.status(200).json({
+        success: false,
+        error: "no_face_detected",
+        message:
+          "I couldn't clearly analyze your coloring from this image. Please upload a clear photo with your face fully visible and natural lighting if possible.",
       });
     }
 
@@ -689,6 +729,7 @@ app.post("/analyze_body_shape", async (req, res) => {
 
     if (!imageUrl && !base64Image) {
       return res.status(400).json({
+        success: false,
         error: "Missing imageUrl or base64Image",
       });
     }
@@ -712,67 +753,24 @@ app.post("/analyze_body_shape", async (req, res) => {
 
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "body_shape_analysis",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              bodyShape: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  title: { type: "string" },
-                  description: { type: "string" },
-                },
-                required: ["title", "description"],
-              },
-              stylingTips: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  tops: {
-                    type: "array",
-                    minItems: 3,
-                    maxItems: 3,
-                    items: { type: "string" },
-                  },
-                  bottoms: {
-                    type: "array",
-                    minItems: 3,
-                    maxItems: 3,
-                    items: { type: "string" },
-                  },
-                  dresses: {
-                    type: "array",
-                    minItems: 3,
-                    maxItems: 3,
-                    items: { type: "string" },
-                  },
-                  accessories: {
-                    type: "array",
-                    minItems: 3,
-                    maxItems: 3,
-                    items: { type: "string" },
-                  },
-                },
-                required: ["tops", "bottoms", "dresses", "accessories"],
-              },
-            },
-            required: ["bodyShape", "stylingTips"],
-          },
-        },
-      },
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content: `
 You are a feminine body shape styling assistant.
 
-Analyze the person in the image and return:
+CRITICAL: If the full body is not clearly visible, do NOT guess or estimate.
+
+Return exactly this if the image shows only a face, only the upper body, a cropped body, unclear body proportions, or no body at all:
+
+{
+  "success": false,
+  "error": "body_not_visible",
+  "message": "Please upload a clear photo that shows your full body from shoulders to legs so I can analyze your body shape accurately."
+}
+
+If the full body IS clearly visible, analyze the person and return:
 
 1. bodyShape
 - title: a short body shape name like "Hourglass", "Pear", "Rectangle", "Inverted Triangle", or "Apple"
@@ -785,6 +783,22 @@ Return exactly 3 tips for each:
 - bottoms
 - dresses
 - accessories
+
+Return JSON in this format:
+
+{
+  "success": true,
+  "bodyShape": {
+    "title": "",
+    "description": ""
+  },
+  "stylingTips": {
+    "tops": ["", "", ""],
+    "bottoms": ["", "", ""],
+    "dresses": ["", "", ""],
+    "accessories": ["", "", ""]
+  }
+}
 
 Rules:
 - Keep tone elegant, supportive, feminine, and app-friendly
@@ -811,7 +825,8 @@ Rules:
 
     if (!isNonEmptyString(content)) {
       return res.status(502).json({
-        error: "No response from model",
+        success: false,
+        error: "empty_model_response",
       });
     }
 
@@ -821,7 +836,18 @@ Rules:
     } catch (parseError) {
       console.error("analyze_body_shape invalid JSON:", content);
       return res.status(502).json({
-        error: "Invalid JSON returned from model",
+        success: false,
+        error: "invalid_json_from_model",
+      });
+    }
+
+    // Layer 2: response contract check
+    if (parsed?.success === false || parsed?.error === "body_not_visible") {
+      return res.status(200).json({
+        success: false,
+        error: "body_not_visible",
+        message:
+          "Please upload a clear photo that shows your full body from shoulders to legs so I can analyze your body shape accurately.",
       });
     }
 
@@ -829,6 +855,7 @@ Rules:
   } catch (error) {
     console.error("analyze_body_shape error full:", error);
     return res.status(500).json({
+      success: false,
       error:
         error instanceof Error ? error.message : "Failed to analyze body shape",
     });
