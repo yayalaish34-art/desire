@@ -83,6 +83,102 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
+app.post("/analyze_celeb_inspiration", async (req, res) => {
+  try {
+    const { imageUrl, base64Image } = req.body ?? {};
+
+    if (!imageUrl && !base64Image) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing imageUrl or base64Image",
+      });
+    }
+
+    const imagePart = imageUrl
+      ? {
+          type: "image_url",
+          image_url: { url: imageUrl },
+        }
+      : {
+          type: "image_url",
+          image_url: {
+            url: `data:image/jpeg;base64,${base64Image}`,
+          },
+        };
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a beauty and styling analyst for a glow-up app.
+
+Analyze the image and provide 4 celebrity references based on facial architecture and aesthetic features.
+
+[Catalyst Component]: Analyze the structural essence and light-reflective qualities of the facial features to determine the most compatible styling archetypes.
+
+Important rules:
+- Focus on: Facial structure, cheekbones, eye shape, jawline, and smile.
+- Tone: Clean, minimalist, premium (matching the "sister_glowup_app" style).
+- Do NOT mention percentages or confidence scores.
+- Use feminine, polished language.
+
+Return JSON exactly in this format:
+{
+  "success": true,
+  "celebrities": [
+    {
+      "name": "Celebrity Name",
+      "description": "A concise description (e.g., 'Similar facial structure with bright smile and blonde hair' or 'High cheekbones and similar eye shape with a natural look').",
+      "tags": ["structure", "aesthetic", "tone"]
+    }
+  ]
+}
+
+Rules:
+- Return exactly 4 celebrities.
+- Ensure the description sounds like the examples in the image: Focus on "Resemblance in eye color", "facial features", "jawline", and "natural look".
+`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analyze this image and return 4 celebrity look-alike references for beauty analysis.",
+            },
+            imagePart,
+          ],
+        },
+      ],
+    });
+
+    const raw = completion.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(raw);
+
+    const celebrities = Array.isArray(parsed.celebrities)
+      ? parsed.celebrities.slice(0, 4)
+      : [];
+
+    return res.json({
+      success: true,
+      title: parsed.title || "Celebrity look alike",
+      subtitle: parsed.subtitle || "Styling based on celebrity look alike",
+      celebrities,
+    });
+  } catch (error) {
+    console.error("analyze_celeb_inspiration error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to analyze celebrity inspiration",
+    });
+  }
+});
+
+
+
 // ---------------- NUTRITION PROMPT ----------------
 const NUTRITION_SYSTEM_PROMPT = `
 You are an advanced food nutrition estimation AI.
