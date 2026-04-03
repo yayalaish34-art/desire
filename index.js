@@ -408,7 +408,7 @@ Return this exact structure:
 {
 "palette": {
   "title": "Light Summer",
-  "description": "A concise explanation written directly to you, based on your visible features (undertone, contrast, hair, eyes, skin softness), explaining why this palette suits you and how these colors enhance your natural appearance in 1-3 short sentences."
+  "description": "A concise explanation written directly to you, based on your visible features (undertone, contrast, hair, eyes, skin softness) in 3 short sentences."
 },
 "metal": {
   "title": "Silver",
