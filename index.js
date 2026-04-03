@@ -406,14 +406,14 @@ Analyze the person in the image and return JSON only.
 Return this exact structure:
 
 {
-  "palette": {
-    "title": "Light Summer",
-    "description": "A short, elegant explanation written directly to the user, explaining why this palette suits you based on your visible features (undertone, contrast, hair, eyes, skin softness). Explain how these colors enhance your natural appearance."
-  },
-  "metal": {
-    "title": "Silver",
-    "description": "A short explanation written directly to you, explaining why this metal complements your undertone and overall coloring."
-  },
+"palette": {
+  "title": "Light Summer",
+  "description": "A concise explanation written directly to you, based on your visible features (undertone, contrast, hair, eyes, skin softness), explaining why this palette suits you and how these colors enhance your natural appearance in 3 short sentences."
+},
+"metal": {
+  "title": "Silver",
+  "description": "A concise explanation written directly to you, explaining why this metal complements your undertone and overall coloring in exactly 2 short sentences."
+},
   "bestColors": [
     { "name": "Soft Rose", "hex": "#D8A7B1" },
     { "name": "Dusty Blue", "hex": "#8CA9C7" },
