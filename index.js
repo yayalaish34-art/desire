@@ -760,14 +760,14 @@ app.post("/analyze_body_shape", async (req, res) => {
           content: `
 You are a feminine body shape styling assistant.
 
-CRITICAL: If the full body is not clearly visible, do NOT guess or estimate.
+CRITICAL: If the body is not clearly visible (at least from shoulders to waist), do NOT guess or estimate.
 
-Return exactly this if the image shows only a face, only the upper body, a cropped body, unclear body proportions, or no body at all:
+Return exactly this if the image shows only a face, is too cropped (e.g., only head), unclear body proportions, or no visible upper body:
 
 {
   "success": false,
   "error": "body_not_visible",
-  "message": "Please upload a clear photo that shows your full body from shoulders to legs so I can analyze your body shape accurately."
+  "message": "Please upload a clear photo that shows at least your upper body (from shoulders to waist) so I can analyze your body shape accurately."
 }
 
 If the full body IS clearly visible, analyze the person and return:
