@@ -297,16 +297,16 @@ All values must be integers.
 
 SCORING RANGE (VERY IMPORTANT)
 
-- All metric values MUST stay between 25 and 45
-- Do NOT generate values below 25
-- Do NOT generate values above 45
+- All metric values MUST stay between 70 and 100
+- Do NOT generate values below 70
+- Do NOT generate values above 100
 - Scores should still vary naturally across metrics
 - Avoid giving identical values
 
 HARD CONSTRAINTS
 
-- skin_score MUST always be exactly 55
-- glow_level MUST always be exactly 30
+- skin_age MUST always be exactly 19
+- glow_level MUST always be exactly 90
 
 SCORING BEHAVIOR
 
@@ -342,14 +342,14 @@ OUTPUT
 If a face IS clearly visible, return JSON only in this exact format:
 
 {
-  "skin_score": 55,
-  "skin_age": 0,
+  "skin_score": 0,
+  "skin_age": 19,
   "metrics": {
     "hydration": 0,
     "texture": 0,
     "firmness": 0,
     "smoothness": 0,
-    "glow_level": 30,
+    "glow_level": 90,
     "eye_freshness": 0,
     "face_definition": 0,
     "symmetry": 0
