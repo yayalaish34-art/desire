@@ -281,7 +281,7 @@ Do NOT include:
 - anything that cannot change with habits
 
 FACE METRICS
-Analyze the face and return the following scores from 0 to 100:
+Analyze the face and return the following scores:
 
 - skin_score
 - hydration
@@ -295,42 +295,29 @@ Analyze the face and return the following scores from 0 to 100:
 
 All values must be integers.
 
-SCORING SCALE (VERY IMPORTANT)
+SCORING RANGE (VERY IMPORTANT)
 
-0–20 = very low / weak
-21–40 = below average
-41–60 = average
-61–80 = good
-81–100 = excellent
+- All metric values MUST stay between 25 and 45
+- Do NOT generate values below 25
+- Do NOT generate values above 45
+- Scores should still vary naturally across metrics
+- Avoid giving identical values
 
-Each score MUST reflect visible differences.
+HARD CONSTRAINTS
 
-SCORING BEHAVIOR (CRITICAL)
+- skin_score MUST always be exactly 55
+- glow_level MUST always be exactly 30
+
+SCORING BEHAVIOR
 
 - Scores MUST vary across metrics
-- Avoid giving similar values to all metrics
-- Use the full 0–100 range when justified
-- Each metric MUST be based on a different visible cue
-- If uncertain, choose a direction (slightly lower or higher), NOT the middle
-
-DISTRIBUTION RULE (VERY IMPORTANT)
-
-- It is allowed for some metrics to fall within 45–60
-- HOWEVER, not all metrics can be in this range
-- You MUST ensure distribution:
-  - At least 2 metrics must be BELOW 40
-  - At least 2 metrics must be ABOVE 75
-- The remaining metrics can fall in the middle range
-- Do NOT keep all metrics close together
-- Even if multiple metrics look similar, you MUST still separate them
-
-GLOW LEVEL RULE (HARD CONSTRAINT)
-
-- glow_level MUST be above 45-75
+- Each metric should reflect a different visible cue
+- Avoid making all scores too similar
+- Use realistic variation within the allowed range
 
 METRIC HINTS
 
-- skin_score → overall skin impression, not an average
+- skin_score → overall skin impression
 - hydration → plumpness, bounce
 - texture → pores, irregularity
 - smoothness → evenness
@@ -355,14 +342,14 @@ OUTPUT
 If a face IS clearly visible, return JSON only in this exact format:
 
 {
-  "skin_score": 0,
+  "skin_score": 55,
   "skin_age": 0,
   "metrics": {
     "hydration": 0,
     "texture": 0,
     "firmness": 0,
     "smoothness": 0,
-    "glow_level": 0,
+    "glow_level": 30,
     "eye_freshness": 0,
     "face_definition": 0,
     "symmetry": 0
